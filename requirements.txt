@@ -1,0 +1,44 @@
+# Core ML / NLP
+torch==2.2.2
+torchvision==0.17.2
+transformers==4.40.1
+accelerate==0.29.3
+datasets==2.19.0
+tokenizers==0.19.1
+evaluate==0.4.1
+sentencepiece==0.2.0
+
+# Data handling
+pandas==2.2.2
+numpy==1.26.4
+
+# NLP utilities
+nltk==3.8.1
+
+# Evaluation / ML utilities
+scikit-learn==1.4.2
+
+# Visualisation
+matplotlib==3.8.4
+seaborn==0.13.2
+wordcloud==1.9.3
+
+# Experiment tracking
+wandb==0.16.6
+
+# Notebook support
+jupyter==1.0.0
+ipykernel==6.29.4
+ipywidgets==8.1.2
+
+# Progress bars and utilities
+tqdm==4.66.2
+requests==2.31.0
+huggingface-hub==0.22.2
+
+# Google Sheets / Forms integration (for human evaluation analysis)
+gspread==6.1.2
+google-auth==2.29.0
+
+# Optional: GLTR-style token probability analysis
+scipy==1.13.0

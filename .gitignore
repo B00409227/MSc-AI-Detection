@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environments
+.env
+.venv
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Models (too large for git — store on HuggingFace Hub or Drive)
+models/checkpoints/*.bin
+models/checkpoints/*.safetensors
+models/checkpoints/*.pt
+models/checkpoints/*.pth
+
+# Large data files
+data/raw/*.jsonl
+data/raw/*.json
+data/raw/*.csv
+data/processed/*.csv
+data/adversarial/*.csv
+data/supplementary/*.csv
+
+# wandb
+wandb/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/*.log
