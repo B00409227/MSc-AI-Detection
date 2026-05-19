@@ -1,0 +1,2 @@
+Condition,Accuracy,Precision,Recall,F1-Score,ROC AUC
+Original (no attack),0.9942,0.9832,0.9995,0.9913,0.9999
