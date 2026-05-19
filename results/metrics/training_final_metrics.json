@@ -1,0 +1,22 @@
+{
+  "model": "roberta-base",
+  "dataset": "HC3",
+  "best_epoch": 1,
+  "val_accuracy": 0.996,
+  "val_precision": 0.9887,
+  "val_recall": 0.9995,
+  "val_f1": 0.9941,
+  "val_loss": 0.030449124053120613,
+  "hyperparameters": {
+    "learning_rate": 2e-05,
+    "batch_size": 8,
+    "grad_accum": 4,
+    "effective_batch": 32,
+    "epochs": 3,
+    "max_length": 512,
+    "weight_decay": 0.01,
+    "warmup_ratio": 0.1,
+    "seed": 42
+  },
+  "best_model_dir": "c:\\Users\\Abdul\\OneDrive\\Documents\\Uni\\MSc\\term3\\MSc-AI-Detection\\models\\checkpoints\\roberta-hc3-best"
+}
