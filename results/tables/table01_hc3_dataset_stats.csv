@@ -1,0 +1,7 @@
+Domain,Human Samples,AI Samples,Total,Avg Words (Human),Avg Words (AI)
+finance,3933,4503,8436,175.6,203.8
+medicine,1248,1334,2582,82.2,186.8
+open_qa,1187,3546,4733,31.4,118.4
+reddit_eli5,51336,16660,67996,133.3,174.9
+wiki_csai,842,842,1684,195.5,185.3
+TOTAL,58546,26885,85431,133.9,173.2
