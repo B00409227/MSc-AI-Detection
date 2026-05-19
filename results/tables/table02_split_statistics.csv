@@ -1,0 +1,4 @@
+Split,Total Samples,Human Samples,AI Samples,% Human,% AI,Avg Word Count
+Train (70%),55156,36808,18348,66.7%,33.3%,139.6
+Validation (15%),11819,7888,3931,66.7%,33.3%,140.7
+Test (15%),11820,7888,3932,66.7%,33.3%,139.6

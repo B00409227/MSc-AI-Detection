@@ -1,0 +1,22 @@
+{
+  "original_samples": 85431,
+  "final_samples": 78795,
+  "removed_samples": 6636,
+  "min_word_filter": 10,
+  "max_word_truncation": 400,
+  "random_seed": 42,
+  "train_size": 55156,
+  "val_size": 11819,
+  "test_size": 11820,
+  "train_human": 36808,
+  "train_ai": 18348,
+  "val_human": 7888,
+  "val_ai": 3931,
+  "test_human": 7888,
+  "test_ai": 3932,
+  "files": {
+    "train": "c:\\Users\\Abdul\\OneDrive\\Documents\\Uni\\MSc\\term3\\MSc-AI-Detection\\data\\processed\\train.csv",
+    "val": "c:\\Users\\Abdul\\OneDrive\\Documents\\Uni\\MSc\\term3\\MSc-AI-Detection\\data\\processed\\val.csv",
+    "test": "c:\\Users\\Abdul\\OneDrive\\Documents\\Uni\\MSc\\term3\\MSc-AI-Detection\\data\\processed\\test.csv"
+  }
+}
