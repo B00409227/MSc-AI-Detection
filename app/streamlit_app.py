@@ -34,12 +34,14 @@ MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 MAX_LENGTH = 512
 DEVICE     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "models", "checkpoints")
+
 MODEL_OPTIONS = {
-    "RoBERTa-base (Fine-tuned)"       : os.path.join(MODELS_DIR, "roberta",          "roberta-hc3-best"),
-    "BERT-base (Fine-tuned)"           : os.path.join(MODELS_DIR, "bert",             "bert-hc3-best"),
-    "DistilBERT (Fine-tuned)"          : os.path.join(MODELS_DIR, "distilbert",       "distilbert-hc3-best"),
-    "HC3 Detector (Hello-SimpleAI)"   : "Hello-SimpleAI/chatgpt-detector-roberta",
-    "Logistic Regression + TF-IDF"    : os.path.join(MODELS_DIR, "logistic_regression", "lr_model.pkl"),
+    "RoBERTa-base (Fine-tuned)"     : os.path.join(CHECKPOINTS_DIR, "roberta-hc3-best"),
+    "BERT-base (Fine-tuned)"         : os.path.join(CHECKPOINTS_DIR, "bert-hc3-best"),
+    "DistilBERT (Fine-tuned)"        : os.path.join(CHECKPOINTS_DIR, "distilbert-hc3-best"),
+    "HC3 Detector (Hello-SimpleAI)" : "Hello-SimpleAI/chatgpt-detector-roberta",
+    "Logistic Regression + TF-IDF"  : os.path.join(MODELS_DIR, "logistic_regression", "lr_model.pkl"),
 }
 
 # ── CSS Styling ───────────────────────────────────────────────────────────────
