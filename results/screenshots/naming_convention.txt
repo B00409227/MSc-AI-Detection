@@ -1,0 +1,24 @@
+Screenshot Naming Convention
+============================
+Save all screenshots to this folder: results/screenshots/
+
+01_hc3_label_distribution.png          — Chapter 4
+02_hc3_text_length_distribution.png    — Chapter 4
+03_m4_dataset_overview.png             — Chapter 4
+04_preprocessing_pipeline.png          — Chapter 4
+05_roberta_training_curves.png         — Chapter 4
+06_bert_training_curves.png            — Chapter 4
+07_distilbert_training_curves.png      — Chapter 4
+08_lr_baseline_results.png             — Chapter 4
+09_pegasus_attack_examples.png         — Chapter 4
+10_all_models_f1_comparison_clean.png  — Chapter 5
+11_all_models_f1_comparison_attacked.png — Chapter 5
+12_confusion_matrix_roberta_clean.png  — Chapter 5
+13_confusion_matrix_roberta_pegasus.png — Chapter 5
+14_confusion_matrix_roberta_quillbot.png — Chapter 5
+15_confusion_matrix_roberta_chatgpt.png — Chapter 5
+16_roc_curves_all_models.png           — Chapter 5
+17_performance_degradation_heatmap.png — Chapter 5
+18_m4_cross_dataset_results.png        — Chapter 5
+19_human_evaluation_results.png        — Chapter 5
+20_streamlit_platform_demo.png         — Chapter 4

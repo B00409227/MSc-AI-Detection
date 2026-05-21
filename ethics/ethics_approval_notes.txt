@@ -1,0 +1,20 @@
+Ethics Approval Notes
+=====================
+Project: Experimental Evaluation of AI-Generated Text Detection Robustness Against Rewriting-Based Attacks
+Student: Abdul Hannaan Mohammed | B00409227
+Supervisor: Dr Tahir Mehmood
+
+Human Evaluation Study Details:
+- Participants: 13-14 volunteers
+- Task: Read 15 text samples, judge each as Human or AI-generated
+- Data collected: Anonymous judgements only (no personal data)
+- Duration: Approximately 10 minutes per participant
+- Risk level: Minimal — no sensitive topics, no personal data collected
+- Consent: Participants informed via Google Form introduction
+
+Status: [ ] Confirm with supervisor whether UWS ethics self-certification form is required
+        [ ] Complete self-certification if required
+        [ ] Attach form to dissertation Appendix D
+
+Note: No sensitive data is collected. Participants are anonymous.
+All text samples are from publicly available datasets (HC3).
