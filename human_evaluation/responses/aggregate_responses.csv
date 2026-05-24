@@ -1,0 +1,16 @@
+question_number,sample_id,condition,true_label,human_votes,ai_votes,n_participants
+1,A4,Original AI,AI,8,7,15
+2,R4,Rewritten AI,AI,9,6,15
+3,A3,Original AI,AI,11,4,15
+4,A2,Original AI,AI,6,9,15
+5,R5,Rewritten AI,AI,11,4,15
+6,R3,Rewritten AI,AI,9,6,15
+7,A1,Original AI,AI,7,8,15
+8,H3,Human,Human,6,9,15
+9,A5,Original AI,AI,10,5,15
+10,H4,Human,Human,7,8,15
+11,H5,Human,Human,9,6,15
+12,R2,Rewritten AI,AI,10,5,15
+13,H1,Human,Human,5,10,15
+14,H2,Human,Human,11,4,15
+15,R1,Rewritten AI,AI,13,2,15
