@@ -35,6 +35,7 @@ data/supplementary/*.csv
 
 # wandb
 wandb/
+**/wandb/
 
 # VS Code
 .vscode/
