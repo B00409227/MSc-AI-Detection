@@ -109,7 +109,6 @@ MSc-AI-Detection/
 ├── screenshots/                            # Evidence screenshots (nb##_name.png)
 ├── logs/                                   # Training logs
 ├── requirements.txt
-├── CLAUDE.md
 └── README.md
 ```
 
