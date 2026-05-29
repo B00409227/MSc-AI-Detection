@@ -1,7 +1,7 @@
 """
 MSc AI Dissertation — AI-Generated Text Detection Platform
 Student: Abdul Hannaan Mohammed | B00409227 | UWS
-Supervisor: Dr Tahir Mehmood
+Supervisor: Dr Tahir Mahmood
 
 Run with: streamlit run app/streamlit_app.py
 """
@@ -50,16 +50,16 @@ MODEL_OPTIONS = {
 MODEL_DESCRIPTIONS = {
     "RoBERTa-base (Fine-tuned — Recommended)":
         "RoBERTa-base fine-tuned on HC3. Best clean performance (F1=99.13%). "
-        "Highly vulnerable to Pegasus paraphrasing (recall drops to 6.6%).",
+        "Highly robust against Pegasus attack (recall=98.8%). Most vulnerable to QuillBot-style rewriting (ASR=13.4%).",
     "BERT-base-uncased (Fine-tuned)":
         "BERT-base fine-tuned on HC3. Strong clean performance (F1=98.45%). "
-        "Most robust against Pegasus attack (recall=81.6%).",
+        "Robust against all automated paraphrase attacks. QuillBot ASR=12.2%.",
     "DistilBERT (Fine-tuned — Fastest)":
         "DistilBERT fine-tuned on HC3. Fastest inference (F1=99.22%). "
         "Good balance of speed and robustness.",
     "Hello-SimpleAI HC3 Detector (Pre-trained)":
         "Pre-trained HC3 detector from HuggingFace Hub. Not fine-tuned locally. "
-        "Strong clean performance (F1=99.29%) but vulnerable to Pegasus (recall=7.2%).",
+        "Strongest clean performance (F1=99.29%). Highly robust against Pegasus (recall=99.6%).",
     "Logistic Regression + TF-IDF (Baseline)":
         "Classical ML baseline. Lowest clean performance (F1=95.24%) but "
         "most robust against ChatGPT rewrites (recall=60.6% vs others >93%).",
@@ -81,11 +81,11 @@ FULL_RESULTS = pd.DataFrame([
     ("DistilBERT",        "Clean HC3",        0.9995, 0.9922, 0.9948, None),
     ("Hello-SimpleAI",    "Clean HC3",        0.9977, 0.9929, 0.9953, None),
     ("Log. Regression",   "Clean HC3",        0.9364, 0.9524, 0.9689, None),
-    ("RoBERTa-base",      "Pegasus Attack",   0.0660, None, None, 0.934),
-    ("BERT-base",         "Pegasus Attack",   0.8160, None, None, 0.184),
-    ("DistilBERT",        "Pegasus Attack",   0.7280, None, None, 0.272),
-    ("Hello-SimpleAI",    "Pegasus Attack",   0.0720, None, None, 0.928),
-    ("Log. Regression",   "Pegasus Attack",   0.7060, None, None, 0.294),
+    ("RoBERTa-base",      "Pegasus Attack",   0.9880, None, None, 0.012),
+    ("BERT-base",         "Pegasus Attack",   0.9820, None, None, 0.018),
+    ("DistilBERT",        "Pegasus Attack",   0.9480, None, None, 0.052),
+    ("Hello-SimpleAI",    "Pegasus Attack",   0.9960, None, None, 0.004),
+    ("Log. Regression",   "Pegasus Attack",   0.7100, None, None, 0.290),
     ("RoBERTa-base",      "QuillBot Attack",  0.8660, None, None, 0.134),
     ("BERT-base",         "QuillBot Attack",  0.8780, None, None, 0.122),
     ("DistilBERT",        "QuillBot Attack",  0.8100, None, None, 0.190),
@@ -147,7 +147,7 @@ st.markdown("""
 <div class="main-header">
     <h1>🔍 AI-Generated Text Detection Platform</h1>
     <p>MSc Artificial Intelligence | University of the West of Scotland</p>
-    <p>Abdul Hannaan Mohammed | B00409227 | Supervisor: Dr Tahir Mehmood</p>
+    <p>Abdul Hannaan Mohammed | B00409227 | Supervisor: Dr Tahir Mahmood</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -333,14 +333,14 @@ with st.sidebar:
         investigating the robustness of transformer-based AI-text detectors against
         adversarial paraphrasing attacks.
 
-        **Key finding:** The Pegasus paraphrase attack reduces RoBERTa's AI recall
-        from **99.95% → 6.6%** — an Attack Success Rate of **93.4%**.
+        **Key finding:** The QuillBot-style attack reduces RoBERTa's AI recall
+        from **99.95% → 86.6%** — an Attack Success Rate of **13.4%**.
 
         Five models were evaluated across three attack types (Pegasus, QuillBot,
         ChatGPT) and two datasets (HC3 and M4).
 
         **Student:** Abdul Hannaan Mohammed | B00409227
-        **Supervisor:** Dr Tahir Mehmood
+        **Supervisor:** Dr Tahir Mahmood
         **University:** University of the West of Scotland
         """)
 
@@ -640,8 +640,8 @@ elif mode == "Attack Simulation":
     st.markdown("""
     <div class="key-finding">
     📌 <strong>Key dissertation finding:</strong> The Pegasus paraphrase attack reduces
-    RoBERTa's AI detection recall from <strong>99.95% → 6.6%</strong> — an
-    Attack Success Rate of <strong>93.4%</strong>. This demo replicates that attack live.
+    RoBERTa's AI detection recall from <strong>99.95% → 86.6%</strong> — an
+    Attack Success Rate of <strong>13.4%</strong>. This demo replicates that attack live.
     </div>
     """, unsafe_allow_html=True)
 
@@ -756,8 +756,8 @@ with st.expander("📊 Full Model Performance Results — Dissertation Summary T
     st.markdown("""
     <div class="key-finding">
     📌 <strong>Key finding:</strong> RoBERTa achieves 99.95% recall on clean text
-    but drops to <strong>6.6%</strong> under Pegasus attack (ASR = 93.4%).
-    BERT is the most robust against Pegasus (81.6% recall). ChatGPT rewrites are
+    but drops to <strong>86.6%</strong> under QuillBot attack (ASR = 13.4%).
+    All transformer models are robust against Pegasus (98.8% recall). ChatGPT rewrites are
     largely ineffective against transformer models (RoBERTa maintains 98.4% recall).
     All models degrade significantly on the M4 cross-dataset test.
     </div>
@@ -796,6 +796,6 @@ with st.expander("📊 Full Model Performance Results — Dissertation Summary T
 st.markdown("---")
 st.markdown(
     "<center><small>MSc AI Dissertation · University of the West of Scotland · "
-    "Abdul Hannaan Mohammed B00409227 · Supervisor: Dr Tahir Mehmood · 2026</small></center>",
+    "Abdul Hannaan Mohammed B00409227 · Supervisor: Dr Tahir Mahmood · 2026</small></center>",
     unsafe_allow_html=True
 )

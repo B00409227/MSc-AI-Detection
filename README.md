@@ -36,7 +36,7 @@ HC3 Dataset (Guo et al., 2023)
                     │
                     ├── Generate adversarial samples:
                     │       ├── T5-Paraphrase Attack  (nb05 — Colab, T5_Paraphrase_Paws)
-                    │       ├── QuillBot-Style Attack  (src/run_pegasus_local_attack.py — local)
+                    │       ├── QuillBot-Style Attack  (src/run_quillbot_style_attack.py — local)
                     │       └── ChatGPT Rewrite        (src/run_chatgpt_attack.py — local)
                     │
                     ├── Evaluate all 5 models × 3 attacks (nb10)
@@ -91,7 +91,8 @@ MSc-AI-Detection/
 │   └── 13_generate_dissertation_charts.ipynb  # All dissertation figures
 ├── src/
 │   ├── prepare_chatgpt_samples.py          # Prepare 500 AI samples
-│   ├── run_pegasus_local_attack.py         # QuillBot-style T5 attack (local)
+│   ├── run_pegasus_attack.py               # Pegasus paraphrase attack (tuner007/pegasus_paraphrase)
+│   ├── run_quillbot_style_attack.py        # QuillBot-style T5 attack (local)
 │   ├── run_chatgpt_attack.py               # ChatGPT rewrite via OpenAI API
 │   └── save_cross_dataset.py               # M4 cross-dataset evaluation
 ├── models/
@@ -130,11 +131,11 @@ MSc-AI-Detection/
 
 | Attack | Model Used | Where Run | Notes |
 |--------|-----------|-----------|-------|
-| T5-Paraphrase (Pegasus-style) | `Vamsi/T5_Paraphrase_Paws` | Google Colab | Beam search decoding |
+| Pegasus Paraphrase | `tuner007/pegasus_paraphrase` | Local GPU | Sentence-level, beam search |
 | QuillBot-style | `Vamsi/T5_Paraphrase_Paws` | Local GPU | Sampling (top-k=200, top-p=0.95) |
 | ChatGPT Rewrite | OpenAI `gpt-3.5-turbo` | Local (API) | Prompt: rewrite to sound human |
 
-Note: DIPPER (Krishna et al., 2023) was originally planned but excluded due to its 11B parameter size exceeding available GPU memory. The T5_Paraphrase_Paws model was used as a practical alternative.
+Note: DIPPER (Krishna et al., 2023) was originally planned but excluded due to its 11B parameter size exceeding available GPU memory. The Pegasus paraphrase model (tuner007/pegasus_paraphrase) was used for the primary attack. T5_Paraphrase_Paws was used for the QuillBot-style high-diversity attack.
 
 ---
 
