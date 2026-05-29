@@ -20,10 +20,7 @@ env/
 *.ipynb_checkpoints
 
 # Models (too large for git — store on HuggingFace Hub or Drive)
-models/checkpoints/*.bin
-models/checkpoints/*.safetensors
-models/checkpoints/*.pt
-models/checkpoints/*.pth
+models/checkpoints/
 
 # Large data files
 data/raw/*.jsonl
