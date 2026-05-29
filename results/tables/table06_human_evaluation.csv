@@ -1,0 +1,5 @@
+Condition,Human Accuracy (%),Correct / Total
+Human,50.7,38 / 75
+Original AI,44.0,33 / 75
+Rewritten AI,30.7,23 / 75
+OVERALL,41.8,94 / 225

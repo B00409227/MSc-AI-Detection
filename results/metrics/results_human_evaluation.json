@@ -1,0 +1,11 @@
+{
+  "n_participants": 15,
+  "n_questions": 15,
+  "total_judgements": 225,
+  "overall_accuracy": 0.4178,
+  "human_text_accuracy": 0.507,
+  "original_ai_accuracy": 0.44,
+  "rewritten_ai_accuracy": 0.307,
+  "roberta_original_detection": 1.0,
+  "roberta_rewritten_detection": 0.066
+}

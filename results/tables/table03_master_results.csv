@@ -1,0 +1,29 @@
+model,dataset,condition,n_samples,accuracy,precision,recall,f1,roc_auc,attack_success_rate,notes,f1_drop,recall_drop
+RoBERTa-base,HC3,Clean,11820,0.9942,0.9832,0.9995,0.9913,0.9999,,Source: results_original_test.json,,
+BERT-base,HC3,Clean,11820,0.9895,0.9697,0.9997,0.9845,0.9999,,Source: all_results.csv,,
+DistilBERT,HC3,Clean,11820,0.9948,0.985,0.9995,0.9922,0.9999,,Source: all_results.csv,,
+Hello-SimpleAI,HC3,Clean,11820,0.9953,0.9882,0.9977,0.9929,0.9997,,Source: helloSimpleAI_metrics.json,,
+LogisticRegression,HC3,Clean,11820,0.9689,0.9689,0.9364,0.9524,0.9961,,Source: lr_final_metrics.json,,
+RoBERTa-base,HC3,Pegasus-Attack,500,,,0.066,,,0.934,AI-only samples; acc/prec/f1 not available (recall only stored),,0.9335
+BERT-base,HC3,Pegasus-Attack,500,,,0.816,,,0.184,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1837
+DistilBERT,HC3,Pegasus-Attack,500,,,0.728,,,0.272,AI-only samples; acc/prec/f1 not available (recall only stored),,0.2715
+Hello-SimpleAI,HC3,Pegasus-Attack,500,,,0.072,,,0.928,AI-only samples; acc/prec/f1 not available (recall only stored),,0.9257
+LogisticRegression,HC3,Pegasus-Attack,500,,,0.706,,,0.294,AI-only samples; acc/prec/f1 not available (recall only stored),,0.2304
+RoBERTa-base,HC3,QuillBot-Attack,500,,,0.866,,,0.134,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1335
+BERT-base,HC3,QuillBot-Attack,500,,,0.878,,,0.122,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1217
+DistilBERT,HC3,QuillBot-Attack,500,,,0.81,,,0.19,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1895
+Hello-SimpleAI,HC3,QuillBot-Attack,500,,,0.86,,,0.14,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1377
+LogisticRegression,HC3,QuillBot-Attack,500,,,0.732,,,0.268,AI-only samples; acc/prec/f1 not available (recall only stored),,0.2044
+RoBERTa-base,HC3,ChatGPT-Attack,500,,,0.984,,,0.016,AI-only samples; acc/prec/f1 not available (recall only stored),,0.0155
+BERT-base,HC3,ChatGPT-Attack,500,,,0.968,,,0.032,AI-only samples; acc/prec/f1 not available (recall only stored),,0.0317
+DistilBERT,HC3,ChatGPT-Attack,500,,,0.932,,,0.068,AI-only samples; acc/prec/f1 not available (recall only stored),,0.0675
+Hello-SimpleAI,HC3,ChatGPT-Attack,500,,,0.972,,,0.028,AI-only samples; acc/prec/f1 not available (recall only stored),,0.0257
+LogisticRegression,HC3,ChatGPT-Attack,500,,,0.606,,,0.394,AI-only samples; acc/prec/f1 not available (recall only stored),,0.3304
+RoBERTa-base,M4,Cross-Dataset,2000,0.77,0.8543,0.651,0.7389,0.8548,,"Generalisation test; trained on HC3, evaluated on M4",,
+BERT-base,M4,Cross-Dataset,2000,0.7045,0.9287,0.443,0.5999,0.8966,,"Generalisation test; trained on HC3, evaluated on M4",,
+DistilBERT,M4,Cross-Dataset,2000,0.6325,0.9522,0.279,0.4316,0.8188,,"Generalisation test; trained on HC3, evaluated on M4",,
+Hello-SimpleAI,M4,Cross-Dataset,2000,0.675,0.9108,0.388,0.5442,0.8511,,"Generalisation test; trained on HC3, evaluated on M4",,
+LogisticRegression,M4,Cross-Dataset,2000,0.5525,0.6513,0.226,0.3356,0.7104,,"Generalisation test; trained on HC3, evaluated on M4",,
+Human-Participants,HC3,Human-Text,75,0.507,,,,,,n=15 participants; Google Form study,,
+Human-Participants,HC3,Original-AI,75,0.44,,,,,,n=15 participants; Google Form study,,
+Human-Participants,HC3,Rewritten-AI,75,0.307,,,,,,n=15 participants; Google Form study,,
