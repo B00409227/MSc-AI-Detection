@@ -43,3 +43,7 @@ desktop.ini
 
 # Logs
 logs/*.log
+
+# Local project context and tool settings
+.claude/
+CLAUDE.md
