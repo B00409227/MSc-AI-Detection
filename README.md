@@ -3,7 +3,7 @@
 **Title:** Experimental Evaluation of AI-Generated Text Detection Robustness Against Rewriting-Based Attacks  
 **Student:** Abdul Hannaan Mohammed | Banner ID: B00409227  
 **Programme:** MSc Artificial Intelligence | University of the West of Scotland (UWS)  
-**Supervisor:** Dr Tahir Mehmood  
+**Supervisor:** Dr Tahir Mahmood  
 **Academic Year:** 2025/26  
 **Status:** Experiments complete — dissertation writing in progress
 
