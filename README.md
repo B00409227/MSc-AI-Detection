@@ -50,11 +50,11 @@ HC3 Dataset (Guo et al., 2023)
 
 | Model | Clean F1 | Pegasus ASR | QuillBot ASR | ChatGPT ASR | M4 F1 |
 |-------|----------|-------------|--------------|-------------|-------|
-| RoBERTa-base | 0.9913 | **93.4%** | 13.4% | 1.6% | 0.7389 |
-| BERT-base | 0.9845 | 18.4% | 12.2% | 3.2% | 0.5999 |
-| DistilBERT | 0.9922 | 27.2% | 19.0% | 6.8% | 0.4316 |
-| Hello-SimpleAI | 0.9929 | 92.8% | 13.8% | 2.6% | 0.5442 |
-| Logistic Regression | 0.9524 | 29.4% | 20.4% | **39.4%** | 0.3356 |
+| RoBERTa-base | 0.9913 | 1.2% | 13.4% | 1.6% | 0.7389 |
+| BERT-base | 0.9845 | 1.8% | 12.2% | 3.2% | 0.5999 |
+| DistilBERT | 0.9922 | 5.2% | 19.0% | 6.8% | 0.4316 |
+| Hello-SimpleAI | 0.9929 | 0.4% | 14.0% | 2.8% | 0.5442 |
+| Logistic Regression | 0.9524 | 29.0% | 26.8% | **39.4%** | 0.3356 |
 
 **ASR = Attack Success Rate** (percentage of AI samples evading detection after rewriting)
 

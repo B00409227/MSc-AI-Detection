@@ -55,14 +55,15 @@ To what extent do rewriting and paraphrasing attacks reduce the detection accura
 - Split: 70% train / 15% validation / 15% test
 
 ## Key Results
-| Model | Clean F1 | T5-Paraphrase ASR | QuillBot ASR | ChatGPT ASR | M4 F1 |
-|-------|----------|-------------------|--------------|-------------|-------|
-| RoBERTa-base | 0.9913 | 93.4% | 13.4% | 1.6% | 0.7389 |
-| BERT-base | 0.9845 | 18.4% | 12.2% | 3.2% | 0.5999 |
-| DistilBERT | 0.9922 | 27.2% | 19.0% | 6.8% | 0.4316 |
-| Hello-SimpleAI | 0.9929 | 92.8% | 13.8% | 2.6% | 0.5442 |
-| Logistic Regression | 0.9524 | 29.4% | 20.4% | 39.4% | 0.3356 |
+| Model | Clean F1 | Pegasus ASR | QuillBot ASR | ChatGPT ASR | M4 F1 |
+|-------|----------|-------------|--------------|-------------|-------|
+| RoBERTa-base | 0.9913 | 1.2% | 13.4% | 1.6% | 0.7389 |
+| BERT-base | 0.9845 | 1.8% | 12.2% | 3.2% | 0.5999 |
+| DistilBERT | 0.9922 | 5.2% | 19.0% | 6.8% | 0.4316 |
+| Hello-SimpleAI | 0.9929 | 0.4% | 14.0% | 2.8% | 0.5442 |
+| Logistic Regression | 0.9524 | 29.0% | 26.8% | 39.4% | 0.3356 |
 Human accuracy: 41.8% overall; 30.7% against rewritten AI text (below chance)
+Pegasus ASR = tuner007/pegasus_paraphrase (actual model). Human study used T5_Paraphrase_Paws samples.
 
 ## Evaluation Metrics
 - Accuracy, Precision, Recall, F1-Score
