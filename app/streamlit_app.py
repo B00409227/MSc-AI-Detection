@@ -51,13 +51,19 @@ MODEL_OPTIONS = {
     "DistilBERT":            _local_distilbert if os.path.exists(_local_distilbert) else _HF_DISTILBERT,
     "Hello-SimpleAI":        "Hello-SimpleAI/chatgpt-detector-roberta",
     "Logistic Regression":   _local_lr,
+    "H1-RoBERTa+BiLSTM":    "__h1__",
+    "H2-BERT+TextCNN":       "__h2__",
     "H3-SoftVoting":         "__h3__",
     "H4-FeatureFusion":      "__h4__",
 }
 
 INDIVIDUAL_MODELS = ["RoBERTa-base", "BERT-base", "DistilBERT",
                      "Hello-SimpleAI", "Logistic Regression"]
-HYBRID_MODELS     = ["H3-SoftVoting", "H4-FeatureFusion"]
+HYBRID_MODELS     = ["H1-RoBERTa+BiLSTM", "H2-BERT+TextCNN",
+                     "H3-SoftVoting", "H4-FeatureFusion"]
+LIVE_INFERENCE_MODELS = ["RoBERTa-base", "BERT-base", "DistilBERT",
+                         "Hello-SimpleAI", "Logistic Regression",
+                         "H3-SoftVoting", "H4-FeatureFusion"]
 
 # ── Comprehensive model catalogue ──────────────────────────────────────────────
 MODEL_CARDS = {
@@ -525,6 +531,10 @@ def predict_h4(text: str):
 def predict_text(text: str, model_key: str):
     """Returns (label_int, ai_prob_float, error_str|None). label 1 = AI."""
     path = MODEL_OPTIONS[model_key]
+    if path == "__h1__":
+        return None, None, "RESEARCH_ONLY:H1 — BiLSTM weights are Colab-only. See 🔬 Hybrid Research for results. (Clean F1=0.9910, QuillBot ASR=4.8%)"
+    if path == "__h2__":
+        return None, None, "RESEARCH_ONLY:H2 — TextCNN weights are Colab-only. See 🔬 Hybrid Research for results. (Clean F1=0.9695, QuillBot ASR=9.6%)"
     if path == "__h3__":
         return predict_h3(text)
     if path == "__h4__":
@@ -549,7 +559,9 @@ def predict_text(text: str, model_key: str):
 
 
 def predict_all_models(text: str, include_hybrids: bool = True) -> dict:
-    """Run individual (and optionally hybrid) models. Returns {model_key: (label, prob, err)}."""
+    """Run all live-inference models. Returns {model_key: (label, prob, err)}.
+    H1 and H2 are excluded — research-only (Colab weights).
+    """
     results = {k: predict_text(text, k) for k in INDIVIDUAL_MODELS}
     if include_hybrids:
         results["H3-SoftVoting"]    = predict_text(text, "H3-SoftVoting")
@@ -726,6 +738,12 @@ if mode == "🔍 Single Analysis":
     input_text = ""
 
     with tab_paste:
+        gen_col, _ = st.columns([1, 3])
+        with gen_col:
+            if st.button("🤖 Populate with AI text", key="gen_single_ai"):
+                with st.spinner("Generating with DistilGPT-2…"):
+                    st.session_state["paste_input"] = generate_ai_text("academic writing and research")
+                st.rerun()
         input_text_paste = st.text_area(
             "Paste your text below",
             height=220,
@@ -771,6 +789,14 @@ if mode == "🔍 Single Analysis":
         with st.spinner(f"Running {selected_model}…"):
             label, ai_prob, error = predict_text(input_text, selected_model)
 
+        if error and error.startswith("RESEARCH_ONLY:"):
+            st.info(
+                f"**{selected_model} is a research-only model.** "
+                f"{error[len('RESEARCH_ONLY:'):]}\n\n"
+                "Switch to **🔬 Hybrid Research** mode to see full experimental results, "
+                "or choose a different model from the sidebar."
+            )
+            st.stop()
         if error or ai_prob is None:
             st.warning(f"Model unavailable: {error}. Showing placeholder.")
             ai_prob, label = 0.72, 1
@@ -936,15 +962,26 @@ elif mode == "👥 Human vs AI Lab":
     </div>
     """, unsafe_allow_html=True)
 
-    # Sample loader
+    # Sample loader — uses on_change callbacks so session_state is updated correctly
+    def _load_human_sample():
+        sel = st.session_state.get("h_samp", "— paste your own —")
+        if sel != "— paste your own —":
+            st.session_state["lab_human"] = SAMPLE_HUMAN_TEXTS[sel]
+
+    def _load_ai_sample():
+        sel = st.session_state.get("a_samp", "— paste your own —")
+        if sel != "— paste your own —":
+            st.session_state["lab_ai"] = SAMPLE_AI_TEXTS[sel]
+
     sample_col1, sample_col2, _ = st.columns([2, 2, 1])
     with sample_col1:
-        h_sample = st.selectbox("Load human text sample", ["— paste your own —"] + list(SAMPLE_HUMAN_TEXTS.keys()), key="h_samp")
+        st.selectbox("Load human text sample",
+                     ["— paste your own —"] + list(SAMPLE_HUMAN_TEXTS.keys()),
+                     key="h_samp", on_change=_load_human_sample)
     with sample_col2:
-        a_sample = st.selectbox("Load AI text sample",    ["— paste your own —"] + list(SAMPLE_AI_TEXTS.keys()),    key="a_samp")
-
-    default_human = SAMPLE_HUMAN_TEXTS.get(h_sample, "") if h_sample != "— paste your own —" else ""
-    default_ai    = SAMPLE_AI_TEXTS.get(a_sample, "")    if a_sample != "— paste your own —" else ""
+        st.selectbox("Load AI text sample",
+                     ["— paste your own —"] + list(SAMPLE_AI_TEXTS.keys()),
+                     key="a_samp", on_change=_load_ai_sample)
 
     col_h, col_a = st.columns(2)
 
@@ -952,7 +989,6 @@ elif mode == "👥 Human vs AI Lab":
         st.markdown('<p class="lab-header-human">🧑 HUMAN-WRITTEN TEXT</p>', unsafe_allow_html=True)
         human_text = st.text_area(
             "Human text",
-            value=default_human,
             height=260,
             placeholder="Paste human-written text here, or choose a sample above…",
             key="lab_human",
@@ -965,7 +1001,6 @@ elif mode == "👥 Human vs AI Lab":
         st.markdown('<p class="lab-header-ai">🤖 AI-GENERATED TEXT</p>', unsafe_allow_html=True)
         ai_text = st.text_area(
             "AI text",
-            value=default_ai,
             height=260,
             placeholder="Paste AI-generated text here, or choose a sample above…",
             key="lab_ai",
@@ -974,12 +1009,24 @@ elif mode == "👥 Human vs AI Lab":
         if ai_text:
             st.caption(f"{len(ai_text):,} chars · {len(ai_text.split()):,} words")
 
+        if st.button("🤖 Generate AI text for this field", key="gen_lab_ai"):
+            with st.spinner("Generating with DistilGPT-2…"):
+                st.session_state["lab_ai"] = generate_ai_text("academic writing and research")
+            st.rerun()
+
     run_all = st.toggle("Run all 7 models simultaneously (including H3 & H4 hybrids)", value=True)
 
     btn_disabled = not (bool(human_text.strip()) and bool(ai_text.strip()))
     if st.button("⚡ Analyse Both Texts", type="primary", disabled=btn_disabled):
 
-        models_to_run = list(MODEL_OPTIONS.keys()) if run_all else [selected_model]
+        # H1/H2 are research-only; exclude them from bulk runs
+        if run_all:
+            models_to_run = LIVE_INFERENCE_MODELS
+        elif selected_model in LIVE_INFERENCE_MODELS:
+            models_to_run = [selected_model]
+        else:
+            st.info(f"**{selected_model}** is research-only. Switching to RoBERTa for this run.")
+            models_to_run = ["RoBERTa-base"]
 
         with st.spinner("Running models on both texts…"):
             h_results = {}
@@ -1186,12 +1233,12 @@ elif mode == "🤖 Generate & Detect":
 
     both_ready = bool(generated_display.strip()) and bool(human_gen_text.strip())
 
-    if st.button("🔬 Detect Both — Run All 5 Models", type="primary", disabled=not both_ready):
+    if st.button("🔬 Detect Both — Run All 7 Live Models", type="primary", disabled=not both_ready):
 
-        with st.spinner("Running all 7 models on both texts…"):
+        with st.spinner("Running all 7 live models on both texts…"):
             gen_results = {}
             hum_results = {}
-            for mk in MODEL_OPTIONS:
+            for mk in LIVE_INFERENCE_MODELS:
                 gen_results[mk] = predict_text(generated_display, mk)
                 hum_results[mk] = predict_text(human_gen_text,   mk)
 
@@ -1200,7 +1247,7 @@ elif mode == "🤖 Generate & Detect":
 
         # Summary table
         rows = []
-        for mk in MODEL_OPTIONS:
+        for mk in LIVE_INFERENCE_MODELS:
             _, g_prob, _ = gen_results[mk]
             _, h_prob, _ = hum_results[mk]
             if g_prob is None: g_prob = 0.5
@@ -1227,8 +1274,8 @@ elif mode == "🤖 Generate & Detect":
                      use_container_width=True, hide_index=True)
 
         # Bar chart
-        fig, ax = plt.subplots(figsize=(10, 5))
-        model_names = list(MODEL_OPTIONS.keys())
+        fig, ax = plt.subplots(figsize=(12, 5))
+        model_names = LIVE_INFERENCE_MODELS
         x      = np.arange(len(model_names))
         width  = 0.35
         g_prbs = [max(gen_results[mk][1] or 0, 0) * 100 for mk in model_names]
@@ -1244,9 +1291,9 @@ elif mode == "🤖 Generate & Detect":
         ax.legend(); plt.tight_layout()
         st.pyplot(fig); plt.close()
 
-        n_correct = sum(1 for mk in MODEL_OPTIONS
+        n_correct = sum(1 for mk in LIVE_INFERENCE_MODELS
                         if (gen_results[mk][1] or 0.5) >= 0.5 and (hum_results[mk][1] or 0.5) < 0.5)
-        n_total = len(MODEL_OPTIONS)
+        n_total = len(LIVE_INFERENCE_MODELS)
         st.markdown(
             f'<div class="{"success-box" if n_correct >= n_total//2 else "warning-box"}">'
             f'📊 <strong>{n_correct}/{n_total} models correctly distinguished the AI text from the human text.</strong>'
@@ -1278,10 +1325,17 @@ elif mode == "⚔️ Attack Simulation":
     </div>
     """, unsafe_allow_html=True)
 
+    atk_btn_col, _ = st.columns([1, 3])
+    with atk_btn_col:
+        if st.button("🤖 Populate with AI text", key="gen_attack_ai"):
+            with st.spinner("Generating with DistilGPT-2…"):
+                st.session_state["attack_input"] = generate_ai_text("artificial intelligence and machine learning")
+            st.rerun()
     input_text = st.text_area(
         "Paste AI-generated text to attack",
         height=200,
-        placeholder="Paste AI-generated text here to see how the paraphrase attack affects detection…"
+        placeholder="Paste AI-generated text here to see how the paraphrase attack affects detection…",
+        key="attack_input"
     )
 
     # Show known ASR results for reference
@@ -1544,6 +1598,12 @@ elif mode == "🔬 Hybrid Research":
         "H1 and H2 weights are Colab-only and are not available for live inference."
     )
 
+    hyb_btn_col, _ = st.columns([1, 3])
+    with hyb_btn_col:
+        if st.button("🤖 Populate with AI text", key="gen_hybrid_ai"):
+            with st.spinner("Generating with DistilGPT-2…"):
+                st.session_state["hybrid_input"] = generate_ai_text("artificial intelligence research")
+            st.rerun()
     hybrid_input = st.text_area(
         "Paste text to test with hybrid models",
         height=130,
