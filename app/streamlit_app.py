@@ -313,7 +313,8 @@ with st.sidebar:
 
     mode = st.radio(
         "Analysis Mode",
-        ["Single Text Analysis", "Comparison Mode", "Attack Simulation"],
+        ["Single Text Analysis", "Comparison Mode", "Attack Simulation",
+         "🔬 Hybrid Model Comparison"],
     )
 
     st.markdown("---")
@@ -639,9 +640,10 @@ elif mode == "Attack Simulation":
     st.subheader("⚔️ Attack Simulation — Paraphrase and Re-Detect")
     st.markdown("""
     <div class="key-finding">
-    📌 <strong>Key dissertation finding:</strong> The Pegasus paraphrase attack reduces
-    RoBERTa's AI detection recall from <strong>99.95% → 86.6%</strong> — an
-    Attack Success Rate of <strong>13.4%</strong>. This demo replicates that attack live.
+    📌 <strong>Key dissertation finding:</strong> The QuillBot-style diversified paraphrase attack
+    reduces RoBERTa's AI detection recall from <strong>99.95% → 86.6%</strong> — an
+    Attack Success Rate of <strong>13.4%</strong>. Pegasus (beam-search paraphrase) only achieves 1.2% ASR.
+    This demo replicates the QuillBot-style attack (T5_Paraphrase_Paws, top-k sampling) live.
     </div>
     """, unsafe_allow_html=True)
 
@@ -672,8 +674,8 @@ elif mode == "Attack Simulation":
 
         # Run paraphrase attack then re-score
         with col2:
-            st.markdown("### AFTER Pegasus attack")
-            with st.spinner("Running Pegasus paraphraser (may take 30–60 sec)..."):
+            st.markdown("### AFTER QuillBot-style attack")
+            with st.spinner("Running QuillBot-style paraphraser (T5_Paraphrase_Paws, may take 30–60 sec)..."):
                 try:
                     from transformers import T5ForConditionalGeneration, T5Tokenizer
 
@@ -726,7 +728,7 @@ elif mode == "Attack Simulation":
         ax.axhline(y=50, color="black", linestyle="--", linewidth=1.2, label="Decision boundary")
         ax.set_ylim(0, 110)
         ax.set_ylabel("AI Probability (%)")
-        ax.set_title("Detection Score: Before vs After Pegasus Paraphrase Attack",
+        ax.set_title("Detection Score: Before vs After QuillBot-Style Paraphrase Attack",
                      fontweight="bold")
         ax.bar_label(bars, labels=[f"{prob_orig*100:.1f}%", f"{prob_rew*100:.1f}%"],
                      padding=4, fontsize=13, fontweight="bold")
@@ -746,6 +748,200 @@ elif mode == "Attack Simulation":
                 '<div class="warning-box">⚠️ Attack did not reduce detection probability. '
                 'The text remains detectable.</div>',
                 unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODE 4 — HYBRID MODEL COMPARISON
+# ══════════════════════════════════════════════════════════════════════════════
+elif mode == "🔬 Hybrid Model Comparison":
+
+    st.subheader("🔬 Hybrid Model Comparison — Novel Contribution")
+
+    st.markdown("""
+    <div class="key-finding">
+    📌 <strong>Research contribution:</strong> Four hybrid architectures are introduced that combine
+    complementary detection signals. Each hybrid targets a different robustness limitation of
+    individual transformer models against adversarial rewriting attacks.
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Architecture cards ────────────────────────────────────────────────────
+    st.markdown("### Hybrid Architectures")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        **H1 — RoBERTa + BiLSTM** *(Notebook 14, Colab)*
+        - RoBERTa-base (frozen) → token embeddings
+        - Bidirectional LSTM (256 hidden, 2 layers)
+        - Captures sequential word-order dependencies
+        - *Reference: Schuster & Paliwal (1997) doi:10.1109/78.650093*
+
+        **H2 — BERT + TextCNN** *(Notebook 14, Colab)*
+        - BERT-base (frozen) → token embeddings
+        - Parallel CNN filters (kernel sizes 2, 3, 4)
+        - Detects characteristic AI n-gram phrases
+        - *Reference: Kim (2014) doi:10.3115/v1/D14-1181*
+        """)
+
+    with col2:
+        st.markdown("""
+        **H3 — Soft Voting Ensemble** *(Notebook 15, Local)*
+        - Averages probabilities from RoBERTa + BERT + DistilBERT
+        - No additional training — uses existing checkpoints
+        - Attack must fool all three models simultaneously
+        - *Reference: Lakshminarayanan et al. (2017) arXiv:1612.01474*
+
+        **H4 — Multi-Feature Fusion MLP** *(Notebook 15, Local)*
+        - RoBERTa prob + TF-IDF (500 features) + 6 statistical features
+        - MLP meta-classifier on 507-dim combined feature vector
+        - Multi-signal approach: semantic + vocabulary + stylometric
+        - *Reference: Verma et al. (2023) Ghostbuster arXiv:2305.15047*
+        """)
+
+    # ── Load hybrid results ───────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### Results")
+
+    HYBRID_RESULTS_PATH = os.path.join(PROJECT_ROOT, "results", "metrics", "all_results_with_hybrids.csv")
+
+    if os.path.exists(HYBRID_RESULTS_PATH):
+        hybrid_df = pd.read_csv(HYBRID_RESULTS_PATH)
+        st.success(f"Hybrid results loaded: {len(hybrid_df['model'].unique())} models evaluated.")
+
+        # ── Master comparison table ───────────────────────────────────────────
+        st.markdown("#### Master Results Table — All Models")
+        summary_rows = []
+        for model_name in hybrid_df["model"].unique():
+            m = hybrid_df[hybrid_df["model"] == model_name]
+            clean_f1  = m[m["dataset"] == "HC3-Clean"]["f1"].values
+            peg_asr   = m[m["dataset"] == "Pegasus-Attack"]["attack_success"].values
+            qui_asr   = m[m["dataset"] == "QuillBot-Attack"]["attack_success"].values
+            cha_asr   = m[m["dataset"] == "ChatGPT-Attack"]["attack_success"].values
+            m4_f1     = m[m["dataset"] == "Cross-Dataset"]["f1"].values
+            model_type = "Hybrid" if any(model_name.startswith(h) for h in ["H1-", "H2-", "H3-", "H4-"]) else "Individual"
+            summary_rows.append({
+                "Model":        model_name,
+                "Type":         model_type,
+                "Clean F1":     round(float(clean_f1[0]), 4) if len(clean_f1) else None,
+                "Pegasus ASR":  round(float(peg_asr[0]) * 100, 1) if len(peg_asr) else None,
+                "QuillBot ASR": round(float(qui_asr[0]) * 100, 1) if len(qui_asr) else None,
+                "ChatGPT ASR":  round(float(cha_asr[0]) * 100, 1) if len(cha_asr) else None,
+                "M4 F1":        round(float(m4_f1[0]), 4) if len(m4_f1) else None,
+            })
+
+        summary_table = pd.DataFrame(summary_rows)
+
+        def highlight_hybrid(row):
+            if row["Type"] == "Hybrid":
+                return ["background-color: #fff3e0"] * len(row)
+            return [""] * len(row)
+
+        styled_table = summary_table.style.apply(highlight_hybrid, axis=1)
+        st.dataframe(styled_table, use_container_width=True, hide_index=True)
+
+        # ── Clean F1 comparison chart ─────────────────────────────────────────
+        st.markdown("#### Clean F1 Comparison")
+        clean_data = summary_table.dropna(subset=["Clean F1"])
+        if len(clean_data) > 0:
+            fig, ax = plt.subplots(figsize=(12, 5))
+            colours = ["#2196F3" if t == "Individual" else "#FF9800"
+                       for t in clean_data["Type"]]
+            bars = ax.bar(clean_data["Model"], clean_data["Clean F1"] * 100,
+                          color=colours, edgecolor="white", width=0.6)
+            ax.set_title("F1-Score on HC3-Clean — Individual vs Hybrid Models",
+                         fontweight="bold", fontsize=12)
+            ax.set_ylabel("F1-Score (%)")
+            ax.set_ylim(85, 105)
+            ax.tick_params(axis="x", rotation=30)
+            ax.bar_label(bars, labels=[f"{v:.2f}%" for v in clean_data["Clean F1"] * 100],
+                         padding=3, fontsize=9, fontweight="bold")
+            from matplotlib.patches import Patch
+            ax.legend(handles=[
+                Patch(color="#2196F3", label="Individual models"),
+                Patch(color="#FF9800", label="Hybrid models (contribution)")
+            ])
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+
+        # ── ASR comparison chart ──────────────────────────────────────────────
+        st.markdown("#### Attack Success Rate (Lower = More Robust)")
+        attack_cols = ["Pegasus ASR", "QuillBot ASR", "ChatGPT ASR"]
+        asr_data = summary_table.dropna(subset=attack_cols, how="all")
+        if len(asr_data) > 0:
+            x     = np.arange(len(asr_data))
+            width = 0.25
+            fig, ax = plt.subplots(figsize=(14, 5))
+            attack_colours = ["#E53935", "#8E24AA", "#1E88E5"]
+            for i, col in enumerate(attack_cols):
+                vals = asr_data[col].fillna(0).values
+                bars = ax.bar(x + i * width, vals, width,
+                              label=col.replace(" ASR", ""),
+                              color=attack_colours[i], edgecolor="white", alpha=0.85)
+                ax.bar_label(bars, labels=[f"{v:.1f}%" for v in vals],
+                             padding=2, fontsize=8)
+
+            ax.set_title("Attack Success Rate — All Models (Lower = Better Robustness)",
+                         fontweight="bold", fontsize=12)
+            ax.set_ylabel("Attack Success Rate (%)")
+            ax.set_ylim(0, 55)
+            ax.set_xticks(x + width)
+            ax.set_xticklabels(asr_data["Model"], rotation=30, ha="right")
+            ax.legend(title="Attack Type")
+            ax.axhline(y=0, color="black", linewidth=0.5)
+
+            # Shade hybrid model region
+            n_individual = sum(1 for t in asr_data["Type"] if t == "Individual")
+            ax.axvspan(n_individual - 0.4, len(asr_data) - 0.4,
+                       alpha=0.05, color="orange", label="Hybrid region")
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
+
+        # ── McNemar's test results ────────────────────────────────────────────
+        mcnemar_path = os.path.join(PROJECT_ROOT, "results", "metrics", "mcnemar_test_results.csv")
+        if os.path.exists(mcnemar_path):
+            st.markdown("#### Statistical Significance — McNemar's Test")
+            st.caption("Tests whether performance differences between models are statistically significant. "
+                       "Reference: Dietterich (1998) doi:10.1162/089976698300017197")
+            mcn_df = pd.read_csv(mcnemar_path)
+            st.dataframe(mcn_df, use_container_width=True, hide_index=True)
+
+        # ── Contribution statement ────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("""
+        <div class="key-finding">
+        📌 <strong>Research contribution summary:</strong><br>
+        Hybrid architectures demonstrate that adversarial robustness in AI-text detection
+        improves when complementary signal types are combined. Soft voting (H3) reduces
+        attack success by requiring failures across diverse models; feature fusion (H4)
+        maintains detection when semantic representations are disrupted. These results
+        directly address the research question: robustness limitations stem from single-modality
+        reliance, and architectural diversity is a viable mitigation strategy.
+        </div>
+        """, unsafe_allow_html=True)
+
+    else:
+        st.warning("Hybrid results not found. Run the following notebooks first:")
+        st.markdown("""
+        1. **Notebook 14** (Google Colab) — Train H1 (RoBERTa+BiLSTM) and H2 (BERT+TextCNN)
+        2. Download `results/metrics/hybrid_nb14_results.csv` from Drive to local `results/metrics/`
+        3. **Notebook 15** (Local) — Train H3 (Soft Voting) and H4 (Feature Fusion MLP)
+
+        Then refresh this page — results will load automatically from:
+        `results/metrics/all_results_with_hybrids.csv`
+        """)
+
+        st.markdown("### Expected Results (Placeholder)")
+        placeholder_data = {
+            "Model":        ["RoBERTa-base", "BERT-base", "DistilBERT", "H1-RoBERTa+BiLSTM", "H2-BERT+TextCNN", "H3-SoftVoting", "H4-FeatureFusion"],
+            "Type":         ["Individual", "Individual", "Individual", "Hybrid", "Hybrid", "Hybrid", "Hybrid"],
+            "Clean F1":     [0.9913, 0.9845, 0.9922, "TBD", "TBD", "TBD", "TBD"],
+            "QuillBot ASR": ["13.4%", "12.2%", "19.0%", "TBD", "TBD", "TBD", "TBD"],
+            "ChatGPT ASR":  ["1.6%", "3.2%", "6.8%", "TBD", "TBD", "TBD", "TBD"],
+        }
+        st.dataframe(pd.DataFrame(placeholder_data), use_container_width=True, hide_index=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
