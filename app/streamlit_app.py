@@ -41,13 +41,23 @@ _local_bert       = os.path.join(CHECKPOINTS_DIR, "bert-hc3-best")
 _local_distilbert = os.path.join(CHECKPOINTS_DIR, "distilbert-hc3-best")
 _local_lr         = os.path.join(MODELS_DIR, "logistic_regression", "lr_model.pkl")
 
+_h4_tfidf  = os.path.join(MODELS_DIR, "logistic_regression", "h4_tfidf.pkl")
+_h4_scaler = os.path.join(MODELS_DIR, "logistic_regression", "h4_scaler.pkl")
+_h4_mlp    = os.path.join(MODELS_DIR, "logistic_regression", "h4_mlp.pt")
+
 MODEL_OPTIONS = {
     "RoBERTa-base":          _local_roberta    if os.path.exists(_local_roberta)    else _HF_ROBERTA,
     "BERT-base":             _local_bert       if os.path.exists(_local_bert)       else _HF_BERT,
     "DistilBERT":            _local_distilbert if os.path.exists(_local_distilbert) else _HF_DISTILBERT,
     "Hello-SimpleAI":        "Hello-SimpleAI/chatgpt-detector-roberta",
     "Logistic Regression":   _local_lr,
+    "H3-SoftVoting":         "__h3__",
+    "H4-FeatureFusion":      "__h4__",
 }
+
+INDIVIDUAL_MODELS = ["RoBERTa-base", "BERT-base", "DistilBERT",
+                     "Hello-SimpleAI", "Logistic Regression"]
+HYBRID_MODELS     = ["H3-SoftVoting", "H4-FeatureFusion"]
 
 # ── Comprehensive model catalogue ──────────────────────────────────────────────
 MODEL_CARDS = {
@@ -167,6 +177,35 @@ MODEL_CARDS = {
         "weakness": "QuillBot ASR=16.0% — WORSE than plain RoBERTa (13.4%). The TF-IDF component is disrupted by QuillBot's vocabulary substitution, which degrades the fused feature signal.",
         "why": "The fusion experiment reveals that TF-IDF features are a liability under vocabulary attacks. This motivates future work combining sequential (H1-BiLSTM) with stylometric signals instead of bag-of-words features.",
         "ref": "Verma et al. (2023) Ghostbuster arXiv:2305.15047",
+    },
+    # H1 and H2 are research-only (weights trained on Colab, not available for live inference)
+    "H1-RoBERTa+BiLSTM": {
+        "label": "H1: RoBERTa + BiLSTM (Research Only)", "category": "Hybrid", "badge": "#B71C1C",
+        "arch":  "RoBERTa-base (FROZEN) → BiLSTM(256 hidden, 2 layers, bidir) → classifier",
+        "base":  "ELMo-style feature extraction (Peters et al., 2018)",
+        "train": "BiLSTM + classifier only (2.9% params) · Colab T4 · 5 epochs · lr=1e-3",
+        "device": "Google Colab T4 (15 GB VRAM)", "trainable": "3.6 M / 125 M (2.9%)",
+        "clean_f1": 0.9910, "clean_acc": 0.9940, "clean_recall": 0.9990, "clean_prec": 0.9830,
+        "peg_asr": 1.4, "qui_asr": 4.8, "cgpt_asr": 2.2, "m4_f1": 0.7127,
+        "strength": "⭐ BEST ROBUSTNESS: QuillBot ASR=4.8% — 64% lower than plain RoBERTa. BiLSTM captures sequential patterns that vocabulary substitution cannot disrupt.",
+        "weakness": "Weights only available on Colab — not available for live inference in this app. Inference results shown from dissertation experiments.",
+        "why": "Freezing RoBERTa and adding BiLSTM forces reliance on sequential word-order signals rather than token probability distributions disrupted by paraphrase.",
+        "ref": "Schuster & Paliwal (1997) doi:10.1109/78.650093",
+        "live_inference": False,
+    },
+    "H2-BERT+TextCNN": {
+        "label": "H2: BERT + TextCNN (Research Only)", "category": "Hybrid", "badge": "#B71C1C",
+        "arch":  "BERT-base (FROZEN) → Parallel Conv1d (kernel 2,3,4 · 128 filters) → MaxPool → classifier",
+        "base":  "TextCNN (Kim, 2014) on transformer embeddings",
+        "train": "CNN + classifier only (0.85% params) · Colab T4 · 5 epochs · lr=1e-3",
+        "device": "Google Colab T4 (15 GB VRAM)", "trainable": "936 K / 110 M (0.85%)",
+        "clean_f1": 0.9695, "clean_acc": 0.9763, "clean_recall": 0.9940, "clean_prec": 0.9450,
+        "peg_asr": 4.2, "qui_asr": 9.6, "cgpt_asr": 3.8, "m4_f1": 0.5923,
+        "strength": "QuillBot ASR=9.6% — 28% improvement over BERT. CNN captures AI n-gram patterns. Only 0.85% trainable params.",
+        "weakness": "Weights only available on Colab — not available for live inference. Inference results shown from dissertation experiments.",
+        "why": "CNN filters on frozen BERT embeddings capture local AI phrase patterns without relying on the token-level statistics that paraphrase attacks exploit.",
+        "ref": "Kim (2014) doi:10.3115/v1/D14-1181",
+        "live_inference": False,
     },
 }
 
@@ -372,9 +411,124 @@ def load_paraphraser():
     return tok, mod
 
 
+# ── H4 Feature Fusion MLP ──────────────────────────────────────────────────────
+import torch.nn as nn
+
+class FeatureFusionMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(507, 256), nn.ReLU(), nn.Dropout(0.3),
+            nn.Linear(256, 64),  nn.ReLU(), nn.Dropout(0.2),
+            nn.Linear(64, 2)
+        )
+    def forward(self, x):
+        return self.net(x)
+
+
+@st.cache_resource(show_spinner=False)
+def load_h4_model():
+    """Load H4 artifacts: TF-IDF vectorizer, StandardScaler, and MLP weights."""
+    import pickle
+    try:
+        with open(_h4_tfidf, "rb") as f:
+            tfidf = pickle.load(f)
+        with open(_h4_scaler, "rb") as f:
+            scaler = pickle.load(f)
+        mlp = FeatureFusionMLP()
+        mlp.load_state_dict(torch.load(_h4_mlp, map_location="cpu", weights_only=True))
+        mlp.eval()
+        return tfidf, scaler, mlp, None
+    except Exception as e:
+        return None, None, None, str(e)
+
+
+def extract_stylometric_features(text: str) -> np.ndarray:
+    """6 stylometric features used by H4 (exact order from notebook 15)."""
+    import string
+    from collections import Counter
+    words = text.split()
+    n_words = max(len(words), 1)
+    # f1: word count
+    f1 = float(n_words)
+    # f2: avg word length (strip punctuation from each word before measuring)
+    stripped = [w.strip(string.punctuation) for w in words]
+    lengths = [len(w) for w in stripped if len(w) > 0]
+    f2 = float(np.mean(lengths)) if lengths else 0.0
+    # f3: type-token ratio (unique / total)
+    f3 = len(set(w.lower() for w in words)) / n_words
+    # f4: punctuation density ((n_punct / n_words) * 100)
+    n_punct = sum(1 for c in text if c in string.punctuation)
+    f4 = (n_punct / n_words) * 100.0
+    # f5: avg sentence length (words per sentence)
+    sents = split_sentences(text)
+    n_sents = max(len(sents), 1)
+    f5 = n_words / n_sents
+    # f6: hapax legomena ratio (words appearing exactly once / total words)
+    freq = Counter(w.lower() for w in words)
+    hapax = sum(1 for c in freq.values() if c == 1)
+    f6 = hapax / n_words
+    return np.array([f1, f2, f3, f4, f5, f6], dtype=np.float32)
+
+
+def predict_h3(text: str):
+    """H3 Soft Voting: average P(AI) from RoBERTa + BERT + DistilBERT."""
+    probs, errors = [], []
+    for key in ["RoBERTa-base", "BERT-base", "DistilBERT"]:
+        path = MODEL_OPTIONS[key]
+        tok, mod = load_transformer_model(path)
+        if tok is None:
+            errors.append(f"{key}: {mod}")
+            continue
+        inp = tok(text, return_tensors="pt", max_length=MAX_LENGTH,
+                  truncation=True, padding=True)
+        inp = {k: v.to(DEVICE) for k, v in inp.items()}
+        with torch.no_grad():
+            logits = mod(**inp).logits
+        p = float(torch.softmax(logits, dim=-1)[0][1])
+        probs.append(p)
+    if not probs:
+        return None, None, "; ".join(errors)
+    avg_prob = float(np.mean(probs))
+    return (1 if avg_prob >= 0.5 else 0), avg_prob, ("; ".join(errors) if errors else None)
+
+
+def predict_h4(text: str):
+    """H4 Feature Fusion: [RoBERTa_prob(1) | TF-IDF(500) | scaled_stylo(6)] → MLP."""
+    tfidf, scaler, mlp, err = load_h4_model()
+    if tfidf is None:
+        return None, None, f"H4 artifacts not found: {err}"
+    # RoBERTa probability (1-dim)
+    path = MODEL_OPTIONS["RoBERTa-base"]
+    tok, mod = load_transformer_model(path)
+    if tok is None:
+        return None, None, f"RoBERTa unavailable: {mod}"
+    inp = tok(text, return_tensors="pt", max_length=MAX_LENGTH,
+              truncation=True, padding=True)
+    inp = {k: v.to(DEVICE) for k, v in inp.items()}
+    with torch.no_grad():
+        logits = mod(**inp).logits
+    rob_prob = float(torch.softmax(logits, dim=-1)[0][1])
+    # TF-IDF features (500-dim)
+    tfidf_feats = tfidf.transform([text]).toarray().astype(np.float32)
+    # Stylometric features scaled (6-dim)
+    stylo = extract_stylometric_features(text).reshape(1, -1)
+    scaled_stylo = scaler.transform(stylo).astype(np.float32)
+    # Concatenate: [roberta_prob | tfidf_500 | scaled_stylo_6] = 507-dim
+    x = np.concatenate([np.array([[rob_prob]], dtype=np.float32), tfidf_feats, scaled_stylo], axis=1)
+    with torch.no_grad():
+        logits_h4 = mlp(torch.tensor(x, dtype=torch.float32))
+    ai_prob = float(torch.softmax(logits_h4, dim=-1)[0][1])
+    return (1 if ai_prob >= 0.5 else 0), ai_prob, None
+
+
 def predict_text(text: str, model_key: str):
     """Returns (label_int, ai_prob_float, error_str|None). label 1 = AI."""
     path = MODEL_OPTIONS[model_key]
+    if path == "__h3__":
+        return predict_h3(text)
+    if path == "__h4__":
+        return predict_h4(text)
     if model_key == "Logistic Regression":
         pipe, err = load_logistic_regression(path)
         if pipe is None:
@@ -394,9 +548,13 @@ def predict_text(text: str, model_key: str):
     return (1 if ai_prob >= 0.5 else 0), ai_prob, None
 
 
-def predict_all_models(text: str) -> dict:
-    """Run all 5 individual models. Returns {model_key: (label, prob, err)}."""
-    return {k: predict_text(text, k) for k in MODEL_OPTIONS}
+def predict_all_models(text: str, include_hybrids: bool = True) -> dict:
+    """Run individual (and optionally hybrid) models. Returns {model_key: (label, prob, err)}."""
+    results = {k: predict_text(text, k) for k in INDIVIDUAL_MODELS}
+    if include_hybrids:
+        results["H3-SoftVoting"]    = predict_text(text, "H3-SoftVoting")
+        results["H4-FeatureFusion"] = predict_text(text, "H4-FeatureFusion")
+    return results
 
 
 def generate_ai_text(prompt: str, max_new: int = 180) -> str:
@@ -710,6 +868,41 @@ if mode == "🔍 Single Analysis":
             st.markdown('<div class="success-box">✅ No common AI phrase patterns found.</div>',
                         unsafe_allow_html=True)
 
+        # Stylometric features panel (H4's 6 features — shown for all analyses)
+        st.markdown("---")
+        st.subheader("📐 Stylometric Feature Analysis (H4 Features)")
+        with st.expander("View the 6 stylometric features used by the H4-FeatureFusion model", expanded=False):
+            try:
+                stylo = extract_stylometric_features(input_text)
+                sf1, sf2, sf3, sf4, sf5, sf6 = stylo
+                sc1, sc2, sc3 = st.columns(3)
+                sc1.metric("Word Count", f"{sf1:.0f}")
+                sc2.metric("Avg Word Length", f"{sf2:.2f} chars")
+                sc3.metric("Type-Token Ratio", f"{sf3:.3f}")
+                sc1.metric("Punct Density", f"{sf4:.2f} per 100w")
+                sc2.metric("Avg Sent Length", f"{sf5:.1f} words")
+                sc3.metric("Hapax Legomena", f"{sf6:.3f}")
+                st.caption(
+                    "**Type-Token Ratio:** unique/total words — higher = more diverse vocabulary. "
+                    "**Hapax legomena:** proportion of words appearing exactly once — AI text tends to be lower. "
+                    "**Punct density:** AI text often has lower punctuation density."
+                )
+                # Radar-style bar chart of normalised features
+                fig_s, ax_s = plt.subplots(figsize=(8, 3))
+                feature_labels = ["Word Count\n÷1000", "Avg Word\nLength", "Type-Token\nRatio",
+                                  "Punct\nDensity÷100", "Avg Sent\nLength÷50", "Hapax\nRatio"]
+                # Normalise each feature to 0–1 for visual comparison
+                norms = [sf1/1000, sf2/10, sf3, sf4/100, sf5/50, sf6]
+                norms = [min(max(v, 0), 1) for v in norms]
+                colours = ["#1565C0", "#1B5E20", "#4A148C", "#E65100", "#B71C1C", "#004D40"]
+                ax_s.bar(feature_labels, norms, color=colours, alpha=0.85, edgecolor="white")
+                ax_s.set_ylim(0, 1.1); ax_s.set_ylabel("Normalised Value")
+                ax_s.set_title("H4 Stylometric Profile — Normalised Feature Values", fontweight="bold")
+                ax_s.axhline(0.5, color="gray", linestyle="--", linewidth=0.8, label="Midpoint")
+                plt.tight_layout(); st.pyplot(fig_s); plt.close()
+            except Exception as e:
+                st.warning(f"Could not compute stylometric features: {e}")
+
         # Export
         st.markdown("---")
         ex1, ex2 = st.columns(2)
@@ -781,7 +974,7 @@ elif mode == "👥 Human vs AI Lab":
         if ai_text:
             st.caption(f"{len(ai_text):,} chars · {len(ai_text.split()):,} words")
 
-    run_all = st.toggle("Run all 5 models simultaneously", value=True)
+    run_all = st.toggle("Run all 7 models simultaneously (including H3 & H4 hybrids)", value=True)
 
     btn_disabled = not (bool(human_text.strip()) and bool(ai_text.strip()))
     if st.button("⚡ Analyse Both Texts", type="primary", disabled=btn_disabled):
@@ -995,7 +1188,7 @@ elif mode == "🤖 Generate & Detect":
 
     if st.button("🔬 Detect Both — Run All 5 Models", type="primary", disabled=not both_ready):
 
-        with st.spinner("Running all 5 models on both texts…"):
+        with st.spinner("Running all 7 models on both texts…"):
             gen_results = {}
             hum_results = {}
             for mk in MODEL_OPTIONS:
@@ -1053,9 +1246,10 @@ elif mode == "🤖 Generate & Detect":
 
         n_correct = sum(1 for mk in MODEL_OPTIONS
                         if (gen_results[mk][1] or 0.5) >= 0.5 and (hum_results[mk][1] or 0.5) < 0.5)
+        n_total = len(MODEL_OPTIONS)
         st.markdown(
-            f'<div class="{"success-box" if n_correct >= 3 else "warning-box"}">'
-            f'📊 <strong>{n_correct}/5 models correctly distinguished the AI text from the human text.</strong>'
+            f'<div class="{"success-box" if n_correct >= n_total//2 else "warning-box"}">'
+            f'📊 <strong>{n_correct}/{n_total} models correctly distinguished the AI text from the human text.</strong>'
             f'</div>',
             unsafe_allow_html=True
         )
@@ -1341,6 +1535,62 @@ elif mode == "🔬 Hybrid Research":
             <small><em>{c['strength']}</em></small>
             </div>
             """, unsafe_allow_html=True)
+
+    # ── Live H3 / H4 inference ────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🧪 Live Hybrid Model Analysis")
+    st.markdown(
+        "Compare H3 (Soft Voting) and H4 (Feature Fusion) against plain RoBERTa **on your own text**. "
+        "H1 and H2 weights are Colab-only and are not available for live inference."
+    )
+
+    hybrid_input = st.text_area(
+        "Paste text to test with hybrid models",
+        height=130,
+        placeholder="Paste any text here to see how H3 and H4 compare to RoBERTa…",
+        key="hybrid_input"
+    )
+
+    if st.button("⚡ Run Hybrid Analysis", type="primary", disabled=not bool(hybrid_input.strip())):
+        live_keys = ["RoBERTa-base", "H3-SoftVoting", "H4-FeatureFusion"]
+        live_results = {}
+        with st.spinner("Running RoBERTa, H3, and H4…"):
+            for mk in live_keys:
+                live_results[mk] = predict_text(hybrid_input, mk)
+
+        lc1, lc2, lc3 = st.columns(3)
+        icons = {"RoBERTa-base": "🔵", "H3-SoftVoting": "🟡", "H4-FeatureFusion": "🟠"}
+        for col, mk in zip([lc1, lc2, lc3], live_keys):
+            lbl, prob, err = live_results[mk]
+            with col:
+                if prob is None:
+                    st.error(f"**{mk}**\n\n{err}")
+                else:
+                    verdict = "🤖 AI" if lbl == 1 else "🧑 Human"
+                    colour  = "#dc3545" if lbl == 1 else "#28a745"
+                    st.markdown(
+                        f'<div style="border:2px solid {colour};border-radius:10px;padding:14px;text-align:center">'
+                        f'<div style="font-size:0.9rem;font-weight:700;margin-bottom:8px">{icons[mk]} {mk}</div>'
+                        f'<div style="font-size:1.5rem;font-weight:900;color:{colour}">{verdict}</div>'
+                        f'<div style="font-size:1.1rem;margin-top:6px">AI: <b>{prob*100:.1f}%</b></div>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
+
+        # Stylometric breakdown for this text
+        st.markdown("**H4 Stylometric Features for this text:**")
+        try:
+            stylo = extract_stylometric_features(hybrid_input)
+            sf1, sf2, sf3, sf4, sf5, sf6 = stylo
+            hsc1, hsc2, hsc3 = st.columns(3)
+            hsc1.metric("Word Count", f"{sf1:.0f}")
+            hsc2.metric("Avg Word Length", f"{sf2:.2f}")
+            hsc3.metric("Type-Token Ratio", f"{sf3:.3f}")
+            hsc1.metric("Punct Density", f"{sf4:.2f}")
+            hsc2.metric("Avg Sent Length", f"{sf5:.1f}")
+            hsc3.metric("Hapax Ratio", f"{sf6:.3f}")
+        except Exception as e:
+            st.warning(f"Could not compute stylometric features: {e}")
 
     # Load hybrid results
     st.markdown("---")
