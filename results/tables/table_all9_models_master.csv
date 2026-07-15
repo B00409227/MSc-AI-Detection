@@ -2,7 +2,9 @@ Model,Type,Clean F1,Pegasus ASR,QuillBot ASR,ChatGPT ASR,M4 F1
 RoBERTa-base,Individual,0.9913,1.2%,13.4%,1.6%,0.7389
 BERT-base,Individual,0.9845,1.8%,12.2%,3.2%,0.5999
 DistilBERT,Individual,0.9922,5.2%,19.0%,6.8%,0.4316
-Hello-SimpleAI,Hybrid,0.9929,0.4%,14.0%,2.8%,0.5442
+Hello-SimpleAI,Individual,0.9929,0.4%,14.0%,2.8%,0.5442
 LogisticRegression,Individual,0.9524,29.0%,26.8%,39.4%,0.3356
 H3-SoftVoting,Hybrid,0.9916,1.8%,12.0%,3.2%,0.5825
 H4-FeatureFusion,Hybrid,0.9929,1.8%,16.0%,2.8%,0.5896
+H1-RoBERTa+BiLSTM,Hybrid,0.9910,1.4%,4.8%,2.2%,0.7127
+H2-BERT+TextCNN,Hybrid,0.9695,4.2%,9.6%,3.8%,0.5923

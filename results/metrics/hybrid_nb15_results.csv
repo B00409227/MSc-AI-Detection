@@ -1,0 +1,11 @@
+model,dataset,condition,n_samples,accuracy,precision,recall,f1,roc_auc,attack_success
+H3-SoftVoting,HC3-Clean,balanced,11820,0.9943,0.9835,0.9997,0.9916,1.0,
+H3-SoftVoting,Pegasus-Attack,ai_only,500,,,0.982,,,0.018
+H3-SoftVoting,QuillBot-Attack,ai_only,500,,,0.88,,,0.12
+H3-SoftVoting,ChatGPT-Attack,ai_only,500,,,0.968,,,0.032
+H3-SoftVoting,Cross-Dataset,balanced,2000,0.6975,0.9399,0.422,0.5825,0.8824,
+H4-FeatureFusion,HC3-Clean,balanced,11820,0.9953,0.9872,0.9987,0.9929,0.9996,
+H4-FeatureFusion,Pegasus-Attack,ai_only,500,,,0.982,,,0.018
+H4-FeatureFusion,QuillBot-Attack,ai_only,500,,,0.84,,,0.16
+H4-FeatureFusion,ChatGPT-Attack,ai_only,500,,,0.972,,,0.028
+H4-FeatureFusion,Cross-Dataset,balanced,2000,0.691,0.8775,0.444,0.5896,0.7861,
