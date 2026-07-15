@@ -1,0 +1,11 @@
+model,dataset,condition,n_samples,accuracy,precision,recall,f1,roc_auc,attack_success
+H1-RoBERTa+BiLSTM,HC3-Clean,balanced,11820,0.994,0.9832,0.999,0.991,0.9999,
+H1-RoBERTa+BiLSTM,Pegasus-Attack,ai_only,500,,,0.986,,,0.014
+H1-RoBERTa+BiLSTM,QuillBot-Attack,ai_only,500,,,0.952,,,0.048
+H1-RoBERTa+BiLSTM,ChatGPT-Attack,ai_only,500,,,0.978,,,0.022
+H1-RoBERTa+BiLSTM,Cross-Dataset,balanced,2000,0.738,0.7888,0.65,0.7127,0.8167,
+H2-BERT+TextCNN,HC3-Clean,balanced,11820,0.9791,0.942,0.9987,0.9695,0.9997,
+H2-BERT+TextCNN,Pegasus-Attack,ai_only,500,,,0.958,,,0.042
+H2-BERT+TextCNN,QuillBot-Attack,ai_only,500,,,0.904,,,0.096
+H2-BERT+TextCNN,ChatGPT-Attack,ai_only,500,,,0.962,,,0.038
+H2-BERT+TextCNN,Cross-Dataset,balanced,2000,0.682,0.825,0.462,0.5923,0.8211,
