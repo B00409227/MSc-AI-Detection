@@ -152,6 +152,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ── Cloud vs local detection ──────────────────────────────────────────────────
+_RUNNING_LOCAL = os.path.exists(CHECKPOINTS_DIR)
+if not _RUNNING_LOCAL:
+    st.info(
+        "**Cloud deployment mode:** Fine-tuned local models (RoBERTa, BERT, DistilBERT, Logistic "
+        "Regression) are not available here — model checkpoints are too large to store in the repo. "
+        "**Hello-SimpleAI HC3 Detector** (downloaded from HuggingFace Hub) and all **Hybrid Model "
+        "Comparison** visualisations work fully. For the complete demo, clone the repo and run locally.",
+        icon="ℹ️"
+    )
+
+
 # ── Model loading ─────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_transformer_model(model_name_or_path: str):
