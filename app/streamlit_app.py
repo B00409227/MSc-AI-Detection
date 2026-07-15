@@ -39,12 +39,24 @@ DEVICE          = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 np.random.seed(SEED)
 
+# HuggingFace Hub repos for the 3 fine-tuned transformer models.
+# When running locally and checkpoints exist on disk, local paths are used (faster).
+# When running on cloud (no local checkpoints), models are loaded from HuggingFace Hub.
+_HF_ROBERTA    = "ahm1129/roberta-hc3-detector"
+_HF_BERT       = "ahm1129/bert-hc3-detector"
+_HF_DISTILBERT = "ahm1129/distilbert-hc3-detector"
+
+_local_roberta    = os.path.join(CHECKPOINTS_DIR, "roberta-hc3-best")
+_local_bert       = os.path.join(CHECKPOINTS_DIR, "bert-hc3-best")
+_local_distilbert = os.path.join(CHECKPOINTS_DIR, "distilbert-hc3-best")
+_local_lr         = os.path.join(MODELS_DIR, "logistic_regression", "lr_model.pkl")
+
 MODEL_OPTIONS = {
-    "RoBERTa-base (Fine-tuned — Recommended)": os.path.join(CHECKPOINTS_DIR, "roberta-hc3-best"),
-    "BERT-base-uncased (Fine-tuned)":           os.path.join(CHECKPOINTS_DIR, "bert-hc3-best"),
-    "DistilBERT (Fine-tuned — Fastest)":        os.path.join(CHECKPOINTS_DIR, "distilbert-hc3-best"),
+    "RoBERTa-base (Fine-tuned — Recommended)": _local_roberta    if os.path.exists(_local_roberta)    else _HF_ROBERTA,
+    "BERT-base-uncased (Fine-tuned)":           _local_bert       if os.path.exists(_local_bert)       else _HF_BERT,
+    "DistilBERT (Fine-tuned — Fastest)":        _local_distilbert if os.path.exists(_local_distilbert) else _HF_DISTILBERT,
     "Hello-SimpleAI HC3 Detector (Pre-trained)":"Hello-SimpleAI/chatgpt-detector-roberta",
-    "Logistic Regression + TF-IDF (Baseline)":  os.path.join(MODELS_DIR, "logistic_regression", "lr_model.pkl"),
+    "Logistic Regression + TF-IDF (Baseline)":  _local_lr,
 }
 
 MODEL_DESCRIPTIONS = {
@@ -156,10 +168,10 @@ st.markdown("""
 _RUNNING_LOCAL = os.path.exists(CHECKPOINTS_DIR)
 if not _RUNNING_LOCAL:
     st.info(
-        "**Cloud deployment mode:** Fine-tuned local models (RoBERTa, BERT, DistilBERT, Logistic "
-        "Regression) are not available here — model checkpoints are too large to store in the repo. "
-        "**Hello-SimpleAI HC3 Detector** (downloaded from HuggingFace Hub) and all **Hybrid Model "
-        "Comparison** visualisations work fully. For the complete demo, clone the repo and run locally.",
+        "**Cloud deployment mode:** Transformer models load from HuggingFace Hub on first use "
+        "(RoBERTa ~500 MB, BERT ~430 MB, DistilBERT ~270 MB) — expect a 1–2 minute wait on first "
+        "load per model; they are then cached for the session. All 5 models and all 4 modes are "
+        "fully functional.",
         icon="ℹ️"
     )
 

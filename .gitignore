@@ -19,8 +19,10 @@ env/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
-# Models (too large for git — store on HuggingFace Hub or Drive)
+# Models (too large for git — transformer checkpoints on HuggingFace Hub)
 models/checkpoints/
+# Keep logistic regression and H4 artifacts (small enough for git)
+!models/logistic_regression/
 
 # Large data files
 data/raw/*.jsonl
