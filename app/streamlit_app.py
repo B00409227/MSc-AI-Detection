@@ -1,15 +1,12 @@
 """
-MSc AI Dissertation — AI-Generated Text Detection Platform
+MSc AI Dissertation — AI-Generated Text Detection Platform v2.0
 Student: Abdul Hannaan Mohammed | B00409227 | UWS
 Supervisor: Dr Tahir Mahmood
 
 Run with: streamlit run app/streamlit_app.py
 """
 
-import os
-import sys
-import io
-import time
+import os, sys, io, time, re
 import torch
 import numpy as np
 import pandas as pd
@@ -18,11 +15,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from datetime import datetime
 
-# Add project root to path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
-# ── Page configuration ────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="AI Text Detection — UWS MSc",
     page_icon="🔍",
@@ -30,827 +25,1348 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── Constants ─────────────────────────────────────────────────────────────────
+# ── Paths ──────────────────────────────────────────────────────────────────────
 MODELS_DIR      = os.path.join(PROJECT_ROOT, "models")
 CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "models", "checkpoints")
 MAX_LENGTH      = 512
 SEED            = 42
 DEVICE          = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 np.random.seed(SEED)
 
-# HuggingFace Hub repos for the 3 fine-tuned transformer models.
-# When running locally and checkpoints exist on disk, local paths are used (faster).
-# When running on cloud (no local checkpoints), models are loaded from HuggingFace Hub.
 _HF_ROBERTA    = "ahm1129/roberta-hc3-detector"
 _HF_BERT       = "ahm1129/bert-hc3-detector"
 _HF_DISTILBERT = "ahm1129/distilbert-hc3-detector"
-
 _local_roberta    = os.path.join(CHECKPOINTS_DIR, "roberta-hc3-best")
 _local_bert       = os.path.join(CHECKPOINTS_DIR, "bert-hc3-best")
 _local_distilbert = os.path.join(CHECKPOINTS_DIR, "distilbert-hc3-best")
 _local_lr         = os.path.join(MODELS_DIR, "logistic_regression", "lr_model.pkl")
 
 MODEL_OPTIONS = {
-    "RoBERTa-base (Fine-tuned — Recommended)": _local_roberta    if os.path.exists(_local_roberta)    else _HF_ROBERTA,
-    "BERT-base-uncased (Fine-tuned)":           _local_bert       if os.path.exists(_local_bert)       else _HF_BERT,
-    "DistilBERT (Fine-tuned — Fastest)":        _local_distilbert if os.path.exists(_local_distilbert) else _HF_DISTILBERT,
-    "Hello-SimpleAI HC3 Detector (Pre-trained)":"Hello-SimpleAI/chatgpt-detector-roberta",
-    "Logistic Regression + TF-IDF (Baseline)":  _local_lr,
+    "RoBERTa-base":          _local_roberta    if os.path.exists(_local_roberta)    else _HF_ROBERTA,
+    "BERT-base":             _local_bert       if os.path.exists(_local_bert)       else _HF_BERT,
+    "DistilBERT":            _local_distilbert if os.path.exists(_local_distilbert) else _HF_DISTILBERT,
+    "Hello-SimpleAI":        "Hello-SimpleAI/chatgpt-detector-roberta",
+    "Logistic Regression":   _local_lr,
 }
 
-MODEL_DESCRIPTIONS = {
-    "RoBERTa-base (Fine-tuned — Recommended)":
-        "RoBERTa-base fine-tuned on HC3. Best clean performance (F1=99.13%). "
-        "Highly robust against Pegasus attack (recall=98.8%). Most vulnerable to QuillBot-style rewriting (ASR=13.4%).",
-    "BERT-base-uncased (Fine-tuned)":
-        "BERT-base fine-tuned on HC3. Strong clean performance (F1=98.45%). "
-        "Robust against all automated paraphrase attacks. QuillBot ASR=12.2%.",
-    "DistilBERT (Fine-tuned — Fastest)":
-        "DistilBERT fine-tuned on HC3. Fastest inference (F1=99.22%). "
-        "Good balance of speed and robustness.",
-    "Hello-SimpleAI HC3 Detector (Pre-trained)":
-        "Pre-trained HC3 detector from HuggingFace Hub. Not fine-tuned locally. "
-        "Strongest clean performance (F1=99.29%). Highly robust against Pegasus (recall=99.6%).",
-    "Logistic Regression + TF-IDF (Baseline)":
-        "Classical ML baseline. Lowest clean performance (F1=95.24%) but "
-        "most robust against ChatGPT rewrites (recall=60.6% vs others >93%).",
+# ── Comprehensive model catalogue ──────────────────────────────────────────────
+MODEL_CARDS = {
+    "RoBERTa-base": {
+        "label": "RoBERTa-base (Fine-tuned)", "category": "Individual", "badge": "#1565C0",
+        "arch":  "Encoder-only Transformer · 125 M params · 12 layers · 768 hidden",
+        "base":  "roberta-base (Liu et al., 2019)",
+        "train": "Full fine-tuning · HC3 55,156 samples · 3 epochs · lr=2e-5 · batch=16 · warmup=500",
+        "device": "Local GPU (6 GB VRAM)", "trainable": "125 M (100%)",
+        "clean_f1": 0.9913, "clean_acc": 0.9942, "clean_recall": 0.9995, "clean_prec": 0.9831,
+        "peg_asr": 1.2, "qui_asr": 13.4, "cgpt_asr": 1.6, "m4_f1": 0.7389,
+        "strength": "Best cross-dataset generalisation (M4 F1=0.739). Near-immune to beam-search paraphrase (Pegasus ASR=1.2%). Recommended for deployment.",
+        "weakness": "BPE tokeniser is sensitive to vocabulary substitution — QuillBot-style word replacement achieves 13.4% ASR.",
+        "why": "RoBERTa improves on BERT by removing Next Sentence Prediction, using more data, and longer training. Its robust pretraining makes it the strongest individual detector in this study.",
+        "ref": "Liu et al. (2019) arXiv:1907.11692",
+    },
+    "BERT-base": {
+        "label": "BERT-base-uncased (Fine-tuned)", "category": "Individual", "badge": "#1B5E20",
+        "arch":  "Encoder-only Transformer · 110 M params · 12 layers · 768 hidden",
+        "base":  "bert-base-uncased (Devlin et al., 2019)",
+        "train": "Full fine-tuning · HC3 55,156 samples · 3 epochs · lr=2e-5 · batch=16",
+        "device": "Local GPU (6 GB VRAM)", "trainable": "110 M (100%)",
+        "clean_f1": 0.9845, "clean_acc": 0.9895, "clean_recall": 0.9997, "clean_prec": 0.9694,
+        "peg_asr": 1.8, "qui_asr": 12.2, "cgpt_asr": 3.2, "m4_f1": 0.5999,
+        "strength": "Very high clean recall (99.97%). Balanced robustness across attack types. Lowest ChatGPT ASR (3.2%) of the transformer trio.",
+        "weakness": "Lower M4 F1 (0.600) than RoBERTa — weaker cross-domain generalisation. WordPiece tokeniser vulnerable to paraphrase.",
+        "why": "BERT established the fine-tuning paradigm for NLP. Included as the reference transformer baseline against which improvements are measured.",
+        "ref": "Devlin et al. (2019) doi:10.18653/v1/N19-1423",
+    },
+    "DistilBERT": {
+        "label": "DistilBERT-base (Fine-tuned)", "category": "Individual", "badge": "#4A148C",
+        "arch":  "Encoder-only Transformer · 66 M params · 6 layers · 768 hidden (distilled)",
+        "base":  "distilbert-base-uncased (Sanh et al., 2019)",
+        "train": "Full fine-tuning · HC3 55,156 samples · 4 epochs · lr=2e-5 · Google Colab T4",
+        "device": "Google Colab T4 (15 GB VRAM)", "trainable": "66 M (100%)",
+        "clean_f1": 0.9922, "clean_acc": 0.9948, "clean_recall": 0.9995, "clean_prec": 0.9849,
+        "peg_asr": 5.2, "qui_asr": 19.0, "cgpt_asr": 6.8, "m4_f1": 0.4316,
+        "strength": "Highest clean F1 (0.9922). 40% fewer parameters than BERT — fastest inference. Good for resource-constrained deployment.",
+        "weakness": "Highest attack vulnerability of the transformer trio (QuillBot ASR=19.0%). Weakest cross-dataset generalisation (M4 F1=0.432). Layer reduction reduces adversarial robustness.",
+        "why": "DistilBERT (knowledge distillation) tests whether a compressed model retains robustness. Results show distillation trades adversarial resilience for speed.",
+        "ref": "Sanh et al. (2019) arXiv:1910.01108",
+    },
+    "Hello-SimpleAI": {
+        "label": "Hello-SimpleAI HC3 Detector", "category": "Individual", "badge": "#BF360C",
+        "arch":  "RoBERTa-base fine-tuned by Hello-SimpleAI · pre-trained detector",
+        "base":  "Hello-SimpleAI/chatgpt-detector-roberta (HuggingFace Hub)",
+        "train": "Pre-trained externally on HC3 — not fine-tuned locally. Used as-is.",
+        "device": "N/A (downloaded from HuggingFace Hub)", "trainable": "N/A",
+        "clean_f1": 0.9929, "clean_acc": 0.9953, "clean_recall": 0.9977, "clean_prec": 0.9881,
+        "peg_asr": 0.4, "qui_asr": 14.0, "cgpt_asr": 2.8, "m4_f1": 0.5442,
+        "strength": "Highest clean F1 (0.9929). Most robust against Pegasus (ASR=0.4%) — best beam-search paraphrase defence. No local training required.",
+        "weakness": "QuillBot ASR=14.0% (slightly worse than RoBERTa). M4 F1=0.544 — moderate cross-domain gap despite training on same dataset.",
+        "why": "Serves as a real-world pre-trained baseline. Tests whether externally-trained detectors match locally fine-tuned models and respond similarly to attacks.",
+        "ref": "Guo et al. (2023) HC3 arXiv:2301.07597",
+    },
+    "Logistic Regression": {
+        "label": "Logistic Regression + TF-IDF", "category": "Individual", "badge": "#37474F",
+        "arch":  "TF-IDF (50k features, bigrams) + Logistic Regression · classical ML",
+        "base":  "scikit-learn Pipeline",
+        "train": "Fit on HC3 training set · max_features=50k · C=1.0 · class_weight=balanced",
+        "device": "CPU (seconds)", "trainable": "~50k vocabulary weights",
+        "clean_f1": 0.9524, "clean_acc": 0.9689, "clean_recall": 0.9364, "clean_prec": 0.9703,
+        "peg_asr": 29.0, "qui_asr": 26.8, "cgpt_asr": 39.4, "m4_f1": 0.3356,
+        "strength": "No GPU required. Interpretable — feature weights identify key AI phrases. Serves as a statistical lower bound.",
+        "weakness": "Highest vulnerability across all attack types. Surface-level vocabulary patterns cannot capture deep semantic AI signals. ChatGPT ASR=39.4% — most attackable model.",
+        "why": "Classical ML baseline establishes whether shallow n-gram features suffice for detection, motivating the use of transformer-based approaches.",
+        "ref": "Sokolova & Lapalme (2009) doi:10.1016/j.ipm.2009.03.002",
+    },
+    "H1-RoBERTa+BiLSTM": {
+        "label": "H1: RoBERTa + BiLSTM", "category": "Hybrid", "badge": "#E65100",
+        "arch":  "RoBERTa-base (FROZEN) → BiLSTM (256 hidden, 2 layers, bidirectional) → classifier",
+        "base":  "Feature-based transfer learning (Peters et al., 2018 ELMo approach)",
+        "train": "Only LSTM + classifier trained (2.9% of params) · Google Colab T4 · 5 epochs · lr=1e-3",
+        "device": "Google Colab T4 (15 GB VRAM)", "trainable": "3.6 M / 125 M (2.9%)",
+        "clean_f1": 0.9910, "clean_acc": 0.9940, "clean_recall": 0.9990, "clean_prec": 0.9830,
+        "peg_asr": 1.4, "qui_asr": 4.8, "cgpt_asr": 2.2, "m4_f1": 0.7127,
+        "strength": "⭐ BEST ROBUSTNESS: QuillBot ASR=4.8% — 64% lower than plain RoBERTa (13.4%). BiLSTM captures sequential word-order dependencies that vocabulary substitution cannot easily disrupt. High M4 F1=0.713.",
+        "weakness": "Slightly lower clean F1 (0.991) than full fine-tuning. Requires Colab for training. Adds inference overhead from LSTM layer.",
+        "why": "Freezing RoBERTa and adding BiLSTM forces the classifier to rely on sequential patterns rather than learned token probabilities, which are disrupted by paraphrase attacks. Inspired by Peters et al. (2018) ELMo feature extraction.",
+        "ref": "Schuster & Paliwal (1997) doi:10.1109/78.650093 · Peters et al. (2018)",
+    },
+    "H2-BERT+TextCNN": {
+        "label": "H2: BERT + TextCNN", "category": "Hybrid", "badge": "#E65100",
+        "arch":  "BERT-base (FROZEN) → Parallel Conv1d (kernel=2,3,4 · 128 filters each) → MaxPool → classifier",
+        "base":  "TextCNN (Kim, 2014) adapted for transformer feature extraction",
+        "train": "Only CNN + classifier trained (0.85% of params) · Google Colab T4 · 5 epochs · lr=1e-3",
+        "device": "Google Colab T4 (15 GB VRAM)", "trainable": "936 K / 110 M (0.85%)",
+        "clean_f1": 0.9695, "clean_acc": 0.9763, "clean_recall": 0.9940, "clean_prec": 0.9450,
+        "peg_asr": 4.2, "qui_asr": 9.6, "cgpt_asr": 3.8, "m4_f1": 0.5923,
+        "strength": "QuillBot ASR=9.6% — 28% lower than BERT (12.2%). CNN filters detect characteristic AI n-gram phrases that persist through paraphrase. Extremely parameter-efficient (0.85% trainable).",
+        "weakness": "Lower clean F1 (0.9695) — precision drop (0.945) suggests more false positives. Fixed kernel sizes may miss longer-range AI patterns.",
+        "why": "CNN filters on BERT embeddings capture local n-gram patterns without the model memorising full-text statistics that attacks exploit. Minimal additional training makes it highly efficient.",
+        "ref": "Kim (2014) doi:10.3115/v1/D14-1181",
+    },
+    "H3-SoftVoting": {
+        "label": "H3: Soft Voting Ensemble", "category": "Hybrid", "badge": "#1A237E",
+        "arch":  "Average P(AI) from RoBERTa + BERT + DistilBERT → threshold at 0.5",
+        "base":  "Deep Ensembles (Lakshminarayanan et al., 2017)",
+        "train": "No additional training — uses existing fine-tuned checkpoints",
+        "device": "N/A", "trainable": "0 (ensemble of trained models)",
+        "clean_f1": 0.9916, "clean_acc": 0.9943, "clean_recall": 0.9993, "clean_prec": 0.9839,
+        "peg_asr": 1.8, "qui_asr": 12.0, "cgpt_asr": 3.2, "m4_f1": 0.5825,
+        "strength": "Clean F1=0.9916 with zero extra training. Attack must fool all three models simultaneously. Reduces variance across model predictions.",
+        "weakness": "QuillBot ASR=12.0% — only marginal improvement over individual models. McNemar's test: p=0.899 (NOT statistically significant vs RoBERTa). Does not address underlying vulnerability shared by all three models.",
+        "why": "If all three transformers share the same brittleness to vocabulary substitution, averaging their probabilities cannot overcome the shared vulnerability — which is exactly what McNemar's test confirms.",
+        "ref": "Lakshminarayanan et al. (2017) arXiv:1612.01474",
+    },
+    "H4-FeatureFusion": {
+        "label": "H4: Multi-Feature Fusion MLP", "category": "Hybrid", "badge": "#1A237E",
+        "arch":  "507-dim vector: RoBERTa P(AI) + TF-IDF(500) + 6 stylometric → MLP(507→256→64→2)",
+        "base":  "Ghostbuster-inspired (Verma et al., 2023) multi-signal fusion",
+        "train": "MLP trained · HC3 train set · 30 epochs · lr=1e-4 · batch=256 · ReduceLROnPlateau",
+        "device": "CPU (fast)", "trainable": "149,826 MLP params",
+        "clean_f1": 0.9929, "clean_acc": 0.9953, "clean_recall": 0.9975, "clean_prec": 0.9883,
+        "peg_asr": 1.8, "qui_asr": 16.0, "cgpt_asr": 2.8, "m4_f1": 0.5896,
+        "strength": "Highest clean F1 among hybrids (0.9929). McNemar's test: p=0.006 (SIGNIFICANT vs RoBERTa). Statistically different decision boundaries.",
+        "weakness": "QuillBot ASR=16.0% — WORSE than plain RoBERTa (13.4%). The TF-IDF component is disrupted by QuillBot's vocabulary substitution, which degrades the fused feature signal.",
+        "why": "The fusion experiment reveals that TF-IDF features are a liability under vocabulary attacks. This motivates future work combining sequential (H1-BiLSTM) with stylometric signals instead of bag-of-words features.",
+        "ref": "Verma et al. (2023) Ghostbuster arXiv:2305.15047",
+    },
 }
 
-MODEL_STATS = {
-    "RoBERTa-base (Fine-tuned — Recommended)":   {"F1": 0.9913, "Acc": 0.9942, "Recall": 0.9995},
-    "BERT-base-uncased (Fine-tuned)":              {"F1": 0.9845, "Acc": 0.9895, "Recall": 0.9997},
-    "DistilBERT (Fine-tuned — Fastest)":           {"F1": 0.9922, "Acc": 0.9948, "Recall": 0.9995},
-    "Hello-SimpleAI HC3 Detector (Pre-trained)":   {"F1": 0.9929, "Acc": 0.9953, "Recall": 0.9977},
-    "Logistic Regression + TF-IDF (Baseline)":     {"F1": 0.9524, "Acc": 0.9689, "Recall": 0.9364},
+# ── Sample texts for the Human vs AI Lab ──────────────────────────────────────
+SAMPLE_HUMAN_TEXTS = {
+    "Student Essay (Climate)": (
+        "I've been thinking a lot about climate change lately, especially after watching news "
+        "about the floods in Pakistan last year. Honestly, it's terrifying how fast things are "
+        "changing. I grew up in a city where winters were actually cold, and now we barely get "
+        "a frost. My gran says she remembers proper snow every year. It's not just anecdotal — "
+        "the data backs it up. But what really worries me is the gap between what scientists are "
+        "saying needs to happen and what governments are actually doing. The Paris Agreement was "
+        "a step, sure, but emissions are still rising. I think the biggest barrier is political "
+        "will, not technology — we already have solar and wind that's cheaper than coal in most "
+        "places. So why aren't we moving faster? It feels like we're in a race we've decided "
+        "to run in slow motion."
+    ),
+    "Medical Forum Response": (
+        "Not a doctor but I had something similar last spring. Started with just a nagging "
+        "pain under my right shoulder blade, dismissed it as posture from sitting at my desk "
+        "all day. It kept getting worse over about three weeks, then one morning I woke up and "
+        "couldn't take a deep breath without it stabbing. Went to A&E, turned out to be "
+        "pleurisy — inflammation of the lining around the lungs. They said it was viral, "
+        "probably connected to a cold I'd had the month before. Treatment was basically "
+        "anti-inflammatories and rest. Cleared up in about 10 days but the first few were "
+        "genuinely awful. Definitely get it checked out if the pain is getting worse — "
+        "pleurisy sounds scary but it's treatable, the key is catching it early."
+    ),
+    "History Q&A (Human)": (
+        "The causes of WWI are honestly one of those things that historians still argue about "
+        "a hundred years later, which tells you how complicated it is. The assassination of "
+        "Franz Ferdinand in Sarajevo is the obvious trigger, but that's a bit like saying a "
+        "spark caused a forest fire — the forest was already bone dry. The alliance system "
+        "meant any conflict between two countries could drag in half of Europe. Germany had "
+        "been itching for a war it thought it could win quickly (the Schlieffen Plan), "
+        "Austria-Hungary wanted to punish Serbia, Russia couldn't back down again after the "
+        "humiliation of 1905. Nationalism, imperial competition, an arms race nobody knew "
+        "how to stop — by 1914 a major war was arguably overdetermined. The assassination "
+        "just made it unavoidable to keep ignoring."
+    ),
 }
 
-# Full results table for Feature 10
-FULL_RESULTS = pd.DataFrame([
-    # model, condition, recall, f1, acc, asr
-    ("RoBERTa-base",      "Clean HC3",        0.9995, 0.9913, 0.9942, None),
-    ("BERT-base",         "Clean HC3",        0.9997, 0.9845, 0.9895, None),
-    ("DistilBERT",        "Clean HC3",        0.9995, 0.9922, 0.9948, None),
-    ("Hello-SimpleAI",    "Clean HC3",        0.9977, 0.9929, 0.9953, None),
-    ("Log. Regression",   "Clean HC3",        0.9364, 0.9524, 0.9689, None),
-    ("RoBERTa-base",      "Pegasus Attack",   0.9880, None, None, 0.012),
-    ("BERT-base",         "Pegasus Attack",   0.9820, None, None, 0.018),
-    ("DistilBERT",        "Pegasus Attack",   0.9480, None, None, 0.052),
-    ("Hello-SimpleAI",    "Pegasus Attack",   0.9960, None, None, 0.004),
-    ("Log. Regression",   "Pegasus Attack",   0.7100, None, None, 0.290),
-    ("RoBERTa-base",      "QuillBot Attack",  0.8660, None, None, 0.134),
-    ("BERT-base",         "QuillBot Attack",  0.8780, None, None, 0.122),
-    ("DistilBERT",        "QuillBot Attack",  0.8100, None, None, 0.190),
-    ("Hello-SimpleAI",    "QuillBot Attack",  0.8600, None, None, 0.140),
-    ("Log. Regression",   "QuillBot Attack",  0.7320, None, None, 0.268),
-    ("RoBERTa-base",      "ChatGPT Rewrite",  0.9840, None, None, 0.016),
-    ("BERT-base",         "ChatGPT Rewrite",  0.9680, None, None, 0.032),
-    ("DistilBERT",        "ChatGPT Rewrite",  0.9320, None, None, 0.068),
-    ("Hello-SimpleAI",    "ChatGPT Rewrite",  0.9720, None, None, 0.028),
-    ("Log. Regression",   "ChatGPT Rewrite",  0.6060, None, None, 0.394),
-    ("RoBERTa-base",      "M4 Cross-Dataset", 0.6510, 0.7389, 0.7700, None),
-    ("BERT-base",         "M4 Cross-Dataset", 0.4430, 0.5999, 0.7045, None),
-    ("DistilBERT",        "M4 Cross-Dataset", 0.2790, 0.4316, 0.6325, None),
-    ("Hello-SimpleAI",    "M4 Cross-Dataset", 0.3880, 0.5442, 0.6750, None),
-    ("Log. Regression",   "M4 Cross-Dataset", 0.2260, 0.3356, 0.5525, None),
-], columns=["Model", "Condition", "Recall", "F1", "Accuracy", "Attack_Success_Rate"])
+SAMPLE_AI_TEXTS = {
+    "ChatGPT Essay (Climate)": (
+        "Climate change represents one of the most pressing challenges of the twenty-first "
+        "century, encompassing a broad spectrum of environmental, economic, and social "
+        "implications. It is important to note that the scientific consensus, as reflected "
+        "in numerous Intergovernmental Panel on Climate Change (IPCC) reports, unequivocally "
+        "demonstrates that human activities — particularly the combustion of fossil fuels — "
+        "are the primary driver of observed global warming since the mid-twentieth century. "
+        "Furthermore, the consequences of inaction are projected to be severe, including "
+        "rising sea levels, increased frequency of extreme weather events, and significant "
+        "disruptions to agricultural systems worldwide. In conclusion, addressing climate "
+        "change requires coordinated international action, sustained investment in renewable "
+        "energy infrastructure, and a fundamental transformation of industrial practices "
+        "to ensure a sustainable future for subsequent generations."
+    ),
+    "AI Medical Explanation": (
+        "Pleurisy is a medical condition characterised by inflammation of the pleura, the "
+        "thin two-layered membrane that surrounds the lungs and lines the chest cavity. "
+        "It is essential to understand that this condition can arise from a variety of "
+        "underlying causes, including viral infections, bacterial pneumonia, autoimmune "
+        "disorders such as lupus, or pulmonary embolism. The hallmark symptom is a sharp, "
+        "stabbing chest pain that typically worsens during inhalation, coughing, or sneezing. "
+        "In today's medical landscape, diagnosis is primarily clinical, supported by imaging "
+        "studies such as chest X-ray or CT scan to rule out complications including pleural "
+        "effusion. It is worth noting that treatment is directed at the underlying cause, "
+        "with nonsteroidal anti-inflammatory drugs commonly employed for symptomatic relief."
+    ),
+    "AI History Answer": (
+        "The First World War, which commenced in 1914 and concluded in 1918, arose from a "
+        "complex interplay of factors that historians have categorised into several key "
+        "dimensions. It is crucial to recognise that the immediate catalyst was the "
+        "assassination of Archduke Franz Ferdinand of Austria-Hungary in Sarajevo on "
+        "28 June 1914. However, the deeper structural causes included the system of "
+        "entangling alliances, intensifying imperial rivalry among the European great powers, "
+        "the pervasive nationalist movements destabilising multi-ethnic empires, and an "
+        "unprecedented arms race that had militarised European foreign policy. Furthermore, "
+        "it plays a pivotal role in historical analysis to acknowledge that the mobilisation "
+        "timetables embedded in military planning, particularly Germany's Schlieffen Plan, "
+        "transformed a regional Austro-Serbian conflict into a continent-wide catastrophe."
+    ),
+}
 
-
-# ── CSS Styling ───────────────────────────────────────────────────────────────
+# ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    .main-header {
-        background: linear-gradient(90deg, #003366, #0066cc);
-        padding: 22px 30px;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin-bottom: 24px;
-    }
-    .main-header h1 { margin: 0 0 6px 0; font-size: 2rem; }
-    .main-header p  { margin: 3px 0; font-size: 0.95rem; opacity: 0.9; }
-    .metric-card {
-        background: #f0f4f8;
-        padding: 15px;
-        border-radius: 8px;
-        text-align: center;
-        border-left: 4px solid #0066cc;
-        height: 100%;
-    }
-    .metric-card h3 { margin: 4px 0; font-size: 1.5rem; color: #003366; }
-    .metric-card p  { margin: 0; color: #666; font-size: 0.85rem; }
-    .human-sentence     { background-color: #d4edda; padding: 6px 10px; border-radius: 4px; margin: 3px 0; border-left: 3px solid #28a745; }
-    .ai-sentence        { background-color: #f8d7da; padding: 6px 10px; border-radius: 4px; margin: 3px 0; border-left: 3px solid #dc3545; }
-    .uncertain-sentence { background-color: #fff3cd; padding: 6px 10px; border-radius: 4px; margin: 3px 0; border-left: 3px solid #ffc107; }
-    .warning-box  { background: #fff3cd; border: 1px solid #ffc107; padding: 12px 15px; border-radius: 6px; margin: 8px 0; }
-    .success-box  { background: #d4edda; border: 1px solid #28a745; padding: 12px 15px; border-radius: 6px; margin: 8px 0; }
-    .danger-box   { background: #f8d7da; border: 1px solid #dc3545; padding: 12px 15px; border-radius: 6px; margin: 8px 0; }
-    .traffic-green  { background: #28a745; color: white; padding: 10px 20px; border-radius: 20px; font-weight: bold; text-align: center; display: inline-block; }
-    .traffic-amber  { background: #ffc107; color: #333; padding: 10px 20px; border-radius: 20px; font-weight: bold; text-align: center; display: inline-block; }
-    .traffic-red    { background: #dc3545; color: white; padding: 10px 20px; border-radius: 20px; font-weight: bold; text-align: center; display: inline-block; }
-    .model-info-box { background: #e8f0fe; border: 1px solid #4285f4; padding: 10px 14px; border-radius: 6px; font-size: 0.88rem; margin-top: 6px; }
-    .key-finding    { background: #fff3e0; border-left: 4px solid #ff9800; padding: 12px 15px; border-radius: 4px; font-size: 0.9rem; }
+  .main-header {
+    background: linear-gradient(135deg, #003366 0%, #0055aa 60%, #0077cc 100%);
+    padding: 24px 36px; border-radius: 12px; color: white;
+    text-align: center; margin-bottom: 24px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+  .main-header h1 { margin: 0 0 6px 0; font-size: 2rem; letter-spacing: -0.5px; }
+  .main-header p  { margin: 3px 0; font-size: 0.9rem; opacity: 0.88; }
+
+  .metric-card {
+    background: #f0f4f8; padding: 16px; border-radius: 10px;
+    text-align: center; border-left: 5px solid #0066cc; height: 100%;
+  }
+  .metric-card h3 { margin: 4px 0; font-size: 1.6rem; color: #003366; font-weight: 700; }
+  .metric-card p  { margin: 0; color: #666; font-size: 0.82rem; }
+
+  .verdict-ai    { background:#fde8e8; border:2px solid #dc3545; padding:14px 18px;
+                   border-radius:10px; text-align:center; font-size:1.1rem; font-weight:700; color:#dc3545; }
+  .verdict-human { background:#e8f5e9; border:2px solid #28a745; padding:14px 18px;
+                   border-radius:10px; text-align:center; font-size:1.1rem; font-weight:700; color:#28a745; }
+  .verdict-unc   { background:#fff8e1; border:2px solid #ffc107; padding:14px 18px;
+                   border-radius:10px; text-align:center; font-size:1.1rem; font-weight:700; color:#e65100; }
+
+  .human-sentence     { background:#e8f5e9; padding:7px 12px; border-radius:5px; margin:4px 0; border-left:4px solid #28a745; }
+  .ai-sentence        { background:#fde8e8; padding:7px 12px; border-radius:5px; margin:4px 0; border-left:4px solid #dc3545; }
+  .uncertain-sentence { background:#fff8e1; padding:7px 12px; border-radius:5px; margin:4px 0; border-left:4px solid #ffc107; }
+
+  .traffic-green { background:#28a745; color:white; padding:10px 22px; border-radius:22px; font-weight:700; display:inline-block; }
+  .traffic-amber { background:#ffc107; color:#333;  padding:10px 22px; border-radius:22px; font-weight:700; display:inline-block; }
+  .traffic-red   { background:#dc3545; color:white; padding:10px 22px; border-radius:22px; font-weight:700; display:inline-block; }
+
+  .model-info-box { background:#e8f0fe; border:1px solid #4285f4; padding:10px 14px;
+                    border-radius:6px; font-size:0.87rem; margin-top:6px; }
+  .key-finding    { background:#fff3e0; border-left:5px solid #ff9800; padding:14px 18px;
+                    border-radius:5px; font-size:0.9rem; margin: 10px 0; }
+  .warning-box    { background:#fff3cd; border:1px solid #ffc107; padding:12px 16px; border-radius:6px; margin:8px 0; }
+  .success-box    { background:#d4edda; border:1px solid #28a745; padding:12px 16px; border-radius:6px; margin:8px 0; }
+  .danger-box     { background:#f8d7da; border:1px solid #dc3545; padding:12px 16px; border-radius:6px; margin:8px 0; }
+
+  .model-card-ind { border-left:6px solid #1565C0; background:#f3f8ff; padding:16px;
+                    border-radius:8px; margin-bottom:14px; }
+  .model-card-hyb { border-left:6px solid #E65100; background:#fff8f3; padding:16px;
+                    border-radius:8px; margin-bottom:14px; }
+  .badge-ind { background:#1565C0; color:white; padding:3px 10px; border-radius:12px; font-size:0.78rem; font-weight:600; }
+  .badge-hyb { background:#E65100; color:white; padding:3px 10px; border-radius:12px; font-size:0.78rem; font-weight:600; }
+
+  .lab-col-human { background:#f0faf3; border:2px dashed #28a745; padding:16px;
+                   border-radius:10px; }
+  .lab-col-ai    { background:#fff3f3; border:2px dashed #dc3545; padding:16px;
+                   border-radius:10px; }
+  .lab-header-human { color:#155724; font-size:1.15rem; font-weight:700; margin-bottom:8px; }
+  .lab-header-ai    { color:#721c24; font-size:1.15rem; font-weight:700; margin-bottom:8px; }
+
+  .progress-bar-outer { background:#e0e0e0; border-radius:6px; height:18px; width:100%; }
+  .progress-bar-inner-ai    { background:#dc3545; height:18px; border-radius:6px; }
+  .progress-bar-inner-human { background:#28a745; height:18px; border-radius:6px; }
+  .prob-label { font-size:0.8rem; color:#555; margin-top:2px; }
 </style>
 """, unsafe_allow_html=True)
 
-
-# ── Header ────────────────────────────────────────────────────────────────────
+# ── Header ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
-    <h1>🔍 AI-Generated Text Detection Platform</h1>
-    <p>MSc Artificial Intelligence | University of the West of Scotland</p>
-    <p>Abdul Hannaan Mohammed | B00409227 | Supervisor: Dr Tahir Mahmood</p>
+  <h1>🔍 AI-Generated Text Detection Platform</h1>
+  <p>MSc Artificial Intelligence · University of the West of Scotland</p>
+  <p>Abdul Hannaan Mohammed · B00409227 · Supervisor: Dr Tahir Mahmood</p>
 </div>
 """, unsafe_allow_html=True)
 
-
-# ── Cloud vs local detection ──────────────────────────────────────────────────
 _RUNNING_LOCAL = os.path.exists(CHECKPOINTS_DIR)
 if not _RUNNING_LOCAL:
     st.info(
-        "**Cloud deployment mode:** Transformer models load from HuggingFace Hub on first use "
-        "(RoBERTa ~500 MB, BERT ~430 MB, DistilBERT ~270 MB) — expect a 1–2 minute wait on first "
-        "load per model; they are then cached for the session. All 5 models and all 4 modes are "
-        "fully functional.",
+        "**Cloud mode:** Transformer models download from HuggingFace Hub on first use "
+        "(RoBERTa ≈500 MB, BERT ≈430 MB, DistilBERT ≈270 MB). Expect a 1–2 min wait per model; "
+        "all 5 models and all modes are fully functional once loaded.",
         icon="ℹ️"
     )
 
 
-# ── Model loading ─────────────────────────────────────────────────────────────
+# ── Model loading ──────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
-def load_transformer_model(model_name_or_path: str):
-    """Load a transformer model and tokeniser. Returns (tokeniser, model) or (None, error_str)."""
+def load_transformer_model(path: str):
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
     try:
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
-        tokeniser = AutoTokenizer.from_pretrained(model_name_or_path)
-        model     = AutoModelForSequenceClassification.from_pretrained(model_name_or_path)
-        model     = model.to(DEVICE)
-        model.eval()
-        return tokeniser, model
+        tok = AutoTokenizer.from_pretrained(path)
+        mod = AutoModelForSequenceClassification.from_pretrained(path).to(DEVICE)
+        mod.eval()
+        return tok, mod
     except Exception as e:
         return None, str(e)
 
 
 @st.cache_resource(show_spinner=False)
-def load_logistic_regression(model_path: str):
-    """Load a saved sklearn pipeline from pickle. Returns (pipeline, None) or (None, error_str)."""
+def load_logistic_regression(path: str):
+    import pickle
     try:
-        import pickle
-        with open(model_path, "rb") as f:
-            pipeline = pickle.load(f)
-        return pipeline, None
+        with open(path, "rb") as f:
+            return pickle.load(f), None
     except Exception as e:
         return None, str(e)
+
+
+@st.cache_resource(show_spinner=False)
+def load_text_generator():
+    """Load DistilGPT-2 for AI text generation (350 MB, CPU-friendly)."""
+    from transformers import pipeline as hf_pipeline
+    return hf_pipeline("text-generation", model="distilgpt2", device=-1)
+
+
+@st.cache_resource(show_spinner=False)
+def load_paraphraser():
+    from transformers import T5ForConditionalGeneration, T5Tokenizer
+    tok = T5Tokenizer.from_pretrained("Vamsi/T5_Paraphrase_Paws")
+    mod = T5ForConditionalGeneration.from_pretrained("Vamsi/T5_Paraphrase_Paws").to(DEVICE)
+    mod.eval()
+    return tok, mod
 
 
 def predict_text(text: str, model_key: str):
-    """
-    Run inference on a single text string.
-    Returns (label_int, ai_probability, error_message_or_None).
-    label 1 = AI-Generated, label 0 = Human.
-    """
-    model_path = MODEL_OPTIONS[model_key]
+    """Returns (label_int, ai_prob_float, error_str|None). label 1 = AI."""
+    path = MODEL_OPTIONS[model_key]
+    if model_key == "Logistic Regression":
+        pipe, err = load_logistic_regression(path)
+        if pipe is None:
+            return None, None, err
+        prob = float(pipe.predict_proba([text])[0][1])
+        return (1 if prob >= 0.5 else 0), prob, None
+    tok, mod = load_transformer_model(path)
+    if tok is None:
+        return None, None, mod
+    inp = tok(text, return_tensors="pt", max_length=MAX_LENGTH,
+               truncation=True, padding=True)
+    inp = {k: v.to(DEVICE) for k, v in inp.items()}
+    with torch.no_grad():
+        logits = mod(**inp).logits
+    probs   = torch.softmax(logits, dim=-1)
+    ai_prob = float(probs[0][1])
+    return (1 if ai_prob >= 0.5 else 0), ai_prob, None
 
-    if "Logistic" in model_key:
-        pipeline, err = load_logistic_regression(model_path)
-        if pipeline is None:
-            return None, None, f"Model not loaded — run training notebooks first. ({err})"
-        prob  = pipeline.predict_proba([text])[0][1]
-        label = 1 if prob >= 0.5 else 0
-        return label, float(prob), None
-    else:
-        tokeniser, model = load_transformer_model(model_path)
-        if tokeniser is None:
-            return None, None, f"Model not loaded — run training notebooks first. ({model})"
-        inputs = tokeniser(text, return_tensors="pt",
-                           max_length=MAX_LENGTH, truncation=True, padding=True)
-        inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
-        with torch.no_grad():
-            logits = model(**inputs).logits
-        probs   = torch.softmax(logits, dim=-1)
-        ai_prob = float(probs[0][1])
-        label   = 1 if ai_prob >= 0.5 else 0
-        return label, ai_prob, None
+
+def predict_all_models(text: str) -> dict:
+    """Run all 5 individual models. Returns {model_key: (label, prob, err)}."""
+    return {k: predict_text(text, k) for k in MODEL_OPTIONS}
+
+
+def generate_ai_text(prompt: str, max_new: int = 180) -> str:
+    """Generate AI text using DistilGPT-2."""
+    gen = load_text_generator()
+    full_prompt = (
+        f"The following is a well-written, detailed answer to a question about {prompt}.\n\n"
+        f"Answer: "
+    )
+    result = gen(
+        full_prompt, max_new_tokens=max_new, temperature=0.85,
+        do_sample=True, top_p=0.92, repetition_penalty=1.25,
+        pad_token_id=50256, num_return_sequences=1
+    )
+    generated = result[0]["generated_text"]
+    if full_prompt in generated:
+        generated = generated[len(full_prompt):].strip()
+    sentences = re.split(r'(?<=[.!?])\s+', generated.strip())
+    clean = [s for s in sentences if len(s) > 8]
+    return " ".join(clean[:12]) if clean else generated[:600]
 
 
 def split_sentences(text: str):
-    """Split text into sentences using NLTK if available, otherwise regex fallback."""
     try:
         import nltk
         try:
-            sentences = nltk.sent_tokenize(text)
+            return [s for s in nltk.sent_tokenize(text) if len(s.strip()) > 10]
         except LookupError:
             nltk.download("punkt", quiet=True)
             nltk.download("punkt_tab", quiet=True)
-            sentences = nltk.sent_tokenize(text)
+            return [s for s in nltk.sent_tokenize(text) if len(s.strip()) > 10]
     except Exception:
-        import re
-        sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-    return [s.strip() for s in sentences if len(s.strip()) > 10]
+        return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text.strip()) if len(s.strip()) > 10]
 
 
-def label_colour(ai_prob: float) -> str:
-    """Return CSS class based on AI probability threshold."""
-    if ai_prob >= 0.60:
-        return "ai-sentence"
-    elif ai_prob <= 0.40:
-        return "human-sentence"
-    return "uncertain-sentence"
+def label_colour(p):
+    return "ai-sentence" if p >= 0.6 else "human-sentence" if p <= 0.4 else "uncertain-sentence"
 
+def label_text(p):
+    return "🔴 AI" if p >= 0.6 else "🟢 Human" if p <= 0.4 else "🟡 Uncertain"
 
-def label_text(ai_prob: float) -> str:
-    """Return display label string based on AI probability."""
-    if ai_prob >= 0.60:
-        return "🔴 AI"
-    elif ai_prob <= 0.40:
-        return "🟢 Human"
-    return "🟡 Uncertain"
+def traffic_light_html(pct):
+    if pct < 30:
+        return f'<span class="traffic-green">🟢 LOW AI RISK — {pct:.1f}%</span>'
+    elif pct < 70:
+        return f'<span class="traffic-amber">🟡 MODERATE RISK — {pct:.1f}%</span>'
+    return f'<span class="traffic-red">🔴 HIGH AI RISK — {pct:.1f}%</span>'
 
+def verdict_box(label, prob):
+    pct = prob * 100
+    if label == 1:
+        return f'<div class="verdict-ai">🤖 AI-GENERATED &nbsp;·&nbsp; {pct:.1f}% confidence</div>'
+    else:
+        return f'<div class="verdict-human">🧑 HUMAN-WRITTEN &nbsp;·&nbsp; {(1-prob)*100:.1f}% confidence</div>'
 
-def traffic_light_html(ai_pct: float) -> str:
-    """Return coloured traffic-light badge based on overall AI percentage."""
-    if ai_pct < 30:
-        return f'<span class="traffic-green">🟢 LOW RISK — {ai_pct:.1f}% AI</span>'
-    elif ai_pct < 70:
-        return f'<span class="traffic-amber">🟡 MODERATE RISK — {ai_pct:.1f}% AI</span>'
-    return f'<span class="traffic-red">🔴 HIGH RISK — {ai_pct:.1f}% AI</span>'
-
-
-def extract_docx(file_obj) -> str:
-    """Extract plain text from an uploaded .docx file using python-docx."""
+def extract_docx(f):
     try:
         from docx import Document
-        doc  = Document(file_obj)
-        text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-        return text
-    except ImportError:
+        return "\n".join(p.text for p in Document(f).paragraphs if p.text.strip())
+    except Exception:
         try:
             import docx2txt
-            return docx2txt.process(file_obj)
+            return docx2txt.process(f)
         except Exception as e:
-            return f"ERROR: Could not read .docx — install python-docx: pip install python-docx. ({e})"
+            return f"ERROR: {e}"
 
-
-def results_to_csv(sentences, probs, model_key) -> str:
-    """Build a CSV string from sentence-level results."""
+def results_to_csv(sentences, probs, model_key):
     rows = []
-    for i, (sent, prob) in enumerate(zip(sentences, probs)):
-        label = "AI-Generated" if prob >= 0.6 else "Human" if prob <= 0.4 else "Uncertain"
-        rows.append({
-            "sentence_number": i + 1,
-            "sentence":        sent,
-            "classification":  label,
-            "ai_probability":  f"{prob:.4f}",
-            "confidence_pct":  f"{max(prob, 1-prob)*100:.1f}",
-            "model_used":      model_key,
-            "timestamp":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        })
+    for i, (s, p) in enumerate(zip(sentences, probs)):
+        lbl = "AI-Generated" if p >= 0.6 else "Human" if p <= 0.4 else "Uncertain"
+        rows.append({"sentence_#": i+1, "sentence": s, "classification": lbl,
+                     "ai_probability": f"{p:.4f}", "model": model_key,
+                     "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
     return pd.DataFrame(rows).to_csv(index=False)
 
-
-# ── Sidebar ───────────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.image("https://www.uws.ac.uk/media/4452/uws-logo-white-background.png",
-             use_container_width=True) if False else None  # logo placeholder
-
-    st.title("⚙️ Settings")
-
-    selected_model = st.selectbox(
-        "Select Detection Model",
-        list(MODEL_OPTIONS.keys()),
-        help="Choose the classifier to use for detection"
+def prob_bar_html(prob: float) -> str:
+    pct = prob * 100
+    hpct = (1 - prob) * 100
+    return (
+        f'<div style="margin:4px 0">'
+        f'<div style="display:flex;gap:4px;align-items:center">'
+        f'<span style="width:55px;font-size:0.8rem;color:#dc3545">AI {pct:.0f}%</span>'
+        f'<div style="flex:1;background:#e0e0e0;border-radius:4px;height:14px">'
+        f'<div style="width:{pct:.0f}%;background:#dc3545;height:14px;border-radius:4px"></div></div>'
+        f'</div>'
+        f'<div style="display:flex;gap:4px;align-items:center">'
+        f'<span style="width:55px;font-size:0.8rem;color:#28a745">Human {hpct:.0f}%</span>'
+        f'<div style="flex:1;background:#e0e0e0;border-radius:4px;height:14px">'
+        f'<div style="width:{hpct:.0f}%;background:#28a745;height:14px;border-radius:4px"></div></div>'
+        f'</div></div>'
     )
 
-    stats = MODEL_STATS[selected_model]
+AI_PHRASES = [
+    "it is important to note", "in conclusion", "furthermore", "it is worth noting",
+    "in summary", "to summarise", "as an ai", "delve into", "it is crucial",
+    "in today's world", "in the realm of", "it is essential", "plays a pivotal role",
+    "it is noteworthy", "it is imperative", "a comprehensive overview",
+    "in today's digital age", "it cannot be overstated",
+]
+
+
+# ── Sidebar ────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## ⚙️ Settings")
+
+    mode = st.radio(
+        "Navigation",
+        ["🔍 Single Analysis", "👥 Human vs AI Lab", "🤖 Generate & Detect",
+         "⚔️ Attack Simulation", "📚 Model Explorer", "🔬 Hybrid Research"],
+        label_visibility="collapsed"
+    )
+
+    st.markdown("---")
+    selected_model = st.selectbox(
+        "Active Model (for analysis)",
+        list(MODEL_OPTIONS.keys()),
+        help="Used in Single Analysis, Human vs AI Lab, Attack Simulation"
+    )
+
+    card = MODEL_CARDS[selected_model]
+    badge_cls = "badge-hyb" if card["category"] == "Hybrid" else "badge-ind"
     st.markdown(
-        f'<div class="model-info-box">'
-        f'<strong>Clean HC3 performance:</strong><br>'
-        f'F1 = {stats["F1"]:.4f} &nbsp;|&nbsp; '
-        f'Acc = {stats["Acc"]:.4f} &nbsp;|&nbsp; '
-        f'Recall = {stats["Recall"]:.4f}'
+        f'<span class="{badge_cls}">{card["category"]}</span> '
+        f'<span style="font-size:0.88rem;font-weight:600">&nbsp;{card["label"]}</span>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        f'<div class="model-info-box" style="margin-top:8px">'
+        f'<b>Clean F1</b> {card["clean_f1"]:.4f} &nbsp;·&nbsp; '
+        f'<b>Acc</b> {card["clean_acc"]:.4f}<br>'
+        f'<b>Pegasus ASR</b> {card["peg_asr"]}% &nbsp;·&nbsp; '
+        f'<b>QuillBot ASR</b> {card["qui_asr"]}%'
         f'</div>',
         unsafe_allow_html=True
     )
 
-    st.markdown(f'<div class="model-info-box" style="margin-top:6px">{MODEL_DESCRIPTIONS[selected_model]}</div>',
-                unsafe_allow_html=True)
-
-    mode = st.radio(
-        "Analysis Mode",
-        ["Single Text Analysis", "Comparison Mode", "Attack Simulation",
-         "🔬 Hybrid Model Comparison"],
-    )
-
     st.markdown("---")
     st.markdown("**Colour guide**")
-    st.markdown("🟢 Green = Human (confidence > 60%)")
-    st.markdown("🔴 Red = AI-Generated (confidence > 60%)")
+    st.markdown("🟢 Green = Human (>60% confidence)")
+    st.markdown("🔴 Red = AI-Generated (>60%)")
     st.markdown("🟡 Amber = Uncertain (40–60%)")
+    st.markdown(f"---\n**Device:** `{DEVICE}`")
+    st.markdown(f"**GPU:** `{torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None (CPU)'}`")
 
     st.markdown("---")
-    st.markdown(f"**Device:** `{DEVICE}`")
-    st.markdown(f"**GPU:** `{torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'None'}`")
-
-    st.markdown("---")
-    with st.expander("ℹ️ About this app"):
+    with st.expander("ℹ️ About"):
         st.markdown("""
-        This platform is the demonstration component of an MSc AI dissertation
-        investigating the robustness of transformer-based AI-text detectors against
-        adversarial paraphrasing attacks.
+        MSc AI dissertation platform investigating how adversarial paraphrasing attacks degrade
+        transformer-based AI-text detectors.
 
-        **Key finding:** The QuillBot-style attack reduces RoBERTa's AI recall
-        from **99.95% → 86.6%** — an Attack Success Rate of **13.4%**.
+        **9 models evaluated**: 5 individual + 4 hybrid architectures
+        across 3 attack types (Pegasus, QuillBot, ChatGPT) and 2 datasets.
 
-        Five models were evaluated across three attack types (Pegasus, QuillBot,
-        ChatGPT) and two datasets (HC3 and M4).
+        **Key finding**: QuillBot-style attack reduces RoBERTa recall from
+        **99.95% → 86.6%** (ASR=13.4%). H1-BiLSTM reduces this to **4.8%**.
 
-        **Student:** Abdul Hannaan Mohammed | B00409227
-        **Supervisor:** Dr Tahir Mahmood
-        **University:** University of the West of Scotland
+        **B00409227** · UWS · Dr Tahir Mahmood
         """)
-
-    st.markdown("---")
-    st.markdown('[📂 GitHub Repository](https://github.com/B00409227/MSc-AI-Detection)',
-                unsafe_allow_html=True)
+    st.markdown('[📂 GitHub](https://github.com/B00409227/MSc-AI-Detection)', unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# MODE 1 — SINGLE TEXT ANALYSIS
+# MODE 1 — SINGLE ANALYSIS
 # ══════════════════════════════════════════════════════════════════════════════
-if mode == "Single Text Analysis":
+if mode == "🔍 Single Analysis":
+    st.subheader("🔍 Single Text Analysis")
 
-    st.subheader("📄 Single Text Analysis")
-
-    # Input tabs
     tab_paste, tab_upload = st.tabs(["✏️ Paste Text", "📂 Upload File"])
-
     input_text = ""
 
     with tab_paste:
         input_text_paste = st.text_area(
-            "Paste your text here",
-            height=250,
-            placeholder="Paste any text — essay, article, answer, or any written content...",
+            "Paste your text below",
+            height=220,
+            placeholder="Paste any text — essay, article, email, answer, or assignment...",
             key="paste_input"
         )
         if input_text_paste:
-            st.caption(f"Character count: {len(input_text_paste):,}")
+            st.caption(f"{len(input_text_paste):,} characters · {len(input_text_paste.split()):,} words")
             input_text = input_text_paste
 
     with tab_upload:
-        uploaded_file = st.file_uploader("Upload a .txt or .docx file", type=["txt", "docx"])
-        if uploaded_file is not None:
-            if uploaded_file.name.endswith(".txt"):
-                input_text = uploaded_file.read().decode("utf-8", errors="ignore")
-            elif uploaded_file.name.endswith(".docx"):
-                input_text = extract_docx(uploaded_file)
+        uploaded_file = st.file_uploader("Upload .txt or .docx", type=["txt", "docx"])
+        if uploaded_file:
+            input_text = (uploaded_file.read().decode("utf-8", errors="ignore")
+                          if uploaded_file.name.endswith(".txt") else extract_docx(uploaded_file))
             if input_text and not input_text.startswith("ERROR"):
-                st.success(f"File loaded: {len(input_text.split()):,} words | {len(input_text):,} characters")
-                with st.expander("Preview file contents"):
-                    st.text(input_text[:600] + ("..." if len(input_text) > 600 else ""))
+                st.success(f"Loaded: {len(input_text.split()):,} words")
+                with st.expander("Preview"):
+                    st.text(input_text[:500] + ("…" if len(input_text) > 500 else ""))
             elif input_text.startswith("ERROR"):
-                st.error(input_text)
-                input_text = ""
+                st.error(input_text); input_text = ""
+
+    # ── Model card for selected model ─────────────────────────────────────────
+    card = MODEL_CARDS[selected_model]
+    with st.expander(f"📋 {card['label']} — Architecture & Performance", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Clean F1",     f"{card['clean_f1']:.4f}")
+        c2.metric("Clean Acc",    f"{card['clean_acc']:.4f}")
+        c3.metric("Clean Recall", f"{card['clean_recall']:.4f}")
+        c1.metric("Pegasus ASR",  f"{card['peg_asr']}%")
+        c2.metric("QuillBot ASR", f"{card['qui_asr']}%",
+                  delta=f"{card['qui_asr']-1:.1f}% above min" if card['qui_asr'] > 1 else None,
+                  delta_color="inverse")
+        c3.metric("M4 F1",        f"{card['m4_f1']:.4f}")
+        st.markdown(f"**Architecture:** {card['arch']}")
+        st.markdown(f"**Training:** {card['train']}")
+        st.markdown(f"**Strength:** {card['strength']}")
+        st.markdown(f"**Weakness:** {card['weakness']}")
+        st.caption(f"Reference: {card['ref']}")
 
     if st.button("🔍 Analyse Text", type="primary", disabled=not bool(input_text.strip())):
 
-        # Run overall document classification
-        with st.spinner(f"Running {selected_model}..."):
+        with st.spinner(f"Running {selected_model}…"):
             label, ai_prob, error = predict_text(input_text, selected_model)
 
-        if error:
-            st.markdown(f"""
-            <div class="warning-box">
-            ⚠️ <strong>Model not loaded:</strong> {error}<br>
-            Run the training notebooks first, then reload this page.
-            </div>
-            """, unsafe_allow_html=True)
-            st.info("Showing demonstration placeholder result.")
+        if error or ai_prob is None:
+            st.warning(f"Model unavailable: {error}. Showing placeholder.")
             ai_prob, label = 0.72, 1
 
-        ai_pct    = ai_prob * 100
-        human_pct = (1 - ai_prob) * 100
-        confidence = max(ai_pct, human_pct)
+        ai_pct     = ai_prob * 100
+        confidence = max(ai_pct, 100 - ai_pct)
         verdict    = "AI-Generated" if label == 1 else "Human-Written"
 
-        # Overall document score — 4 metric cards + traffic light
         st.markdown("---")
-        st.subheader("📊 Overall Document Score")
+        st.subheader("📊 Document Result")
 
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.markdown(f'<div class="metric-card"><h3>{verdict}</h3><p>Verdict</p></div>', unsafe_allow_html=True)
-        with col2:
-            st.markdown(f'<div class="metric-card"><h3>{ai_pct:.1f}%</h3><p>AI Probability</p></div>', unsafe_allow_html=True)
-        with col3:
-            st.markdown(f'<div class="metric-card"><h3>{human_pct:.1f}%</h3><p>Human Probability</p></div>', unsafe_allow_html=True)
-        with col4:
-            st.markdown(f'<div class="metric-card"><h3>{confidence:.1f}%</h3><p>Confidence</p></div>', unsafe_allow_html=True)
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: st.markdown(f'<div class="metric-card"><h3>{verdict}</h3><p>Verdict</p></div>', unsafe_allow_html=True)
+        with c2: st.markdown(f'<div class="metric-card"><h3>{ai_pct:.1f}%</h3><p>AI Probability</p></div>', unsafe_allow_html=True)
+        with c3: st.markdown(f'<div class="metric-card"><h3>{(100-ai_pct):.1f}%</h3><p>Human Probability</p></div>', unsafe_allow_html=True)
+        with c4: st.markdown(f'<div class="metric-card"><h3>{confidence:.1f}%</h3><p>Confidence</p></div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown(traffic_light_html(ai_pct), unsafe_allow_html=True)
+        st.markdown(verdict_box(label, ai_prob), unsafe_allow_html=True)
 
-        # Sentence-level analysis
+        # Sentence analysis
         st.markdown("---")
-        st.subheader("📝 Sentence-Level Analysis")
-
+        st.subheader("📝 Sentence-Level Breakdown")
         sentences = split_sentences(input_text)
         sentence_probs = []
 
         if len(sentences) > 1:
-            progress_bar = st.progress(0, text="Analysing sentences...")
-            for i, sent in enumerate(sentences[:25]):
-                _, prob, _ = predict_text(sent, selected_model)
-                sentence_probs.append(prob if prob is not None else ai_prob)
-                progress_bar.progress((i + 1) / min(len(sentences), 25),
-                                      text=f"Sentence {i+1} of {min(len(sentences), 25)}...")
-            progress_bar.empty()
+            prog = st.progress(0, text="Analysing sentences…")
+            for i, sent in enumerate(sentences[:30]):
+                _, p, _ = predict_text(sent, selected_model)
+                sentence_probs.append(p if p is not None else ai_prob)
+                prog.progress((i+1) / min(len(sentences), 30),
+                              text=f"Sentence {i+1}/{min(len(sentences),30)}")
+            prog.empty()
 
-            # Counts
-            n_ai        = sum(1 for p in sentence_probs if p >= 0.6)
-            n_human     = sum(1 for p in sentence_probs if p <= 0.4)
-            n_uncertain = len(sentence_probs) - n_ai - n_human
+            n_ai  = sum(1 for p in sentence_probs if p >= 0.6)
+            n_hum = sum(1 for p in sentence_probs if p <= 0.4)
+            n_unc = len(sentence_probs) - n_ai - n_hum
 
-            cnt_col1, cnt_col2, cnt_col3 = st.columns(3)
-            cnt_col1.metric("🔴 AI sentences",       n_ai)
-            cnt_col2.metric("🟢 Human sentences",    n_human)
-            cnt_col3.metric("🟡 Uncertain sentences", n_uncertain)
+            sc1, sc2, sc3 = st.columns(3)
+            sc1.metric("🔴 AI sentences", n_ai)
+            sc2.metric("🟢 Human sentences", n_hum)
+            sc3.metric("🟡 Uncertain", n_unc)
 
-            # Colour-coded sentence display
-            html_output = ""
-            for i, (sent, prob) in enumerate(zip(sentences[:25], sentence_probs)):
-                css_class = label_colour(prob)
-                lbl       = label_text(prob)
-                html_output += (f'<div class="{css_class}"><strong>S{i+1}:</strong> '
-                                f'{sent} <em>({lbl} — {prob*100:.1f}%)</em></div>')
-            st.markdown(html_output, unsafe_allow_html=True)
+            html = ""
+            for i, (s, p) in enumerate(zip(sentences[:30], sentence_probs)):
+                html += (f'<div class="{label_colour(p)}"><strong>S{i+1}:</strong> '
+                         f'{s} <em>({label_text(p)} — {p*100:.1f}%)</em></div>')
+            st.markdown(html, unsafe_allow_html=True)
         else:
-            st.info("Text is too short for sentence-level breakdown (fewer than 2 sentences detected).")
+            st.info("Text too short for sentence-level breakdown.")
             sentence_probs = [ai_prob]
 
         # Charts
         st.markdown("---")
         st.subheader("📈 Visualisations")
-        chart_col1, chart_col2 = st.columns(2)
+        ch1, ch2 = st.columns(2)
 
-        with chart_col1:
-            fig_pie, ax = plt.subplots(figsize=(5, 4))
-            human_count = sum(1 for p in sentence_probs if p <= 0.4)
-            ai_count    = sum(1 for p in sentence_probs if p >= 0.6)
-            unc_count   = len(sentence_probs) - human_count - ai_count
-            sizes  = [human_count, ai_count, unc_count]
-            labels = ["Human", "AI-Generated", "Uncertain"]
-            colours = ["#28a745", "#dc3545", "#ffc107"]
-            non_zero = [(s, l, c) for s, l, c in zip(sizes, labels, colours) if s > 0]
-            if non_zero:
-                sizes_nz, labels_nz, colours_nz = zip(*non_zero)
-                ax.pie(sizes_nz, labels=labels_nz, colors=colours_nz,
-                       autopct="%1.1f%%", startangle=90, textprops={"fontsize": 10})
-            ax.set_title("Sentence Classification Split", fontweight="bold")
-            st.pyplot(fig_pie)
-            plt.close()
+        with ch1:
+            fig, ax = plt.subplots(figsize=(5, 4))
+            n_ai_c  = sum(1 for p in sentence_probs if p >= 0.6)
+            n_hum_c = sum(1 for p in sentence_probs if p <= 0.4)
+            n_unc_c = len(sentence_probs) - n_ai_c - n_hum_c
+            data = [(n_hum_c,"Human","#28a745"),(n_ai_c,"AI-Generated","#dc3545"),(n_unc_c,"Uncertain","#ffc107")]
+            data = [(s,l,c) for s,l,c in data if s > 0]
+            if data:
+                s,l,c = zip(*data)
+                ax.pie(s, labels=l, colors=c, autopct="%1.1f%%", startangle=90)
+            ax.set_title("Sentence Classification", fontweight="bold")
+            st.pyplot(fig); plt.close()
 
-        with chart_col2:
+        with ch2:
             if len(sentence_probs) > 1:
-                fig_bar, ax = plt.subplots(figsize=(5, 4))
-                bar_colours = ["#dc3545" if p >= 0.6 else "#28a745" if p <= 0.4 else "#ffc107"
-                               for p in sentence_probs]
-                ax.barh(range(len(sentence_probs)), sentence_probs, color=bar_colours)
-                ax.axvline(x=0.5, color="black", linestyle="--", linewidth=1)
-                ax.set_xlim(0, 1)
-                ax.set_xlabel("AI Probability")
+                fig, ax = plt.subplots(figsize=(5, 4))
+                clrs = ["#dc3545" if p >= 0.6 else "#28a745" if p <= 0.4 else "#ffc107"
+                        for p in sentence_probs]
+                ax.barh(range(len(sentence_probs)), [p*100 for p in sentence_probs], color=clrs)
+                ax.axvline(x=50, color="black", linestyle="--", linewidth=1)
+                ax.set_xlim(0, 100)
+                ax.set_xlabel("AI Probability (%)")
                 ax.set_ylabel("Sentence #")
-                ax.set_title("Sentence AI Probability", fontweight="bold")
-                st.pyplot(fig_bar)
-                plt.close()
+                ax.set_title("Per-Sentence AI Score", fontweight="bold")
+                st.pyplot(fig); plt.close()
 
-        # AI phrase pattern check
+        # AI phrase check
         st.markdown("---")
-        st.subheader("🚩 Common AI Phrase Patterns")
-        ai_phrases = [
-            "it is important to note", "in conclusion", "furthermore",
-            "it is worth noting", "in summary", "to summarise",
-            "as an ai", "i am an ai", "delve into", "it is crucial",
-            "in today's world", "in the realm of", "it is essential",
-            "plays a pivotal role", "it is noteworthy"
-        ]
-        found = [p for p in ai_phrases if p.lower() in input_text.lower()]
+        st.subheader("🚩 AI Phrase Pattern Check")
+        found = [p for p in AI_PHRASES if p in input_text.lower()]
         if found:
             st.markdown(
-                f'<div class="danger-box">⚠️ Common AI phrases detected: <strong>{", ".join(found)}</strong></div>',
+                f'<div class="danger-box">⚠️ AI phrases detected: <strong>{", ".join(found)}</strong></div>',
                 unsafe_allow_html=True)
         else:
-            st.markdown('<div class="success-box">✅ No common AI phrase patterns detected.</div>',
+            st.markdown('<div class="success-box">✅ No common AI phrase patterns found.</div>',
                         unsafe_allow_html=True)
 
         # Export
         st.markdown("---")
-        st.subheader("📥 Export Results")
-        export_col1, export_col2 = st.columns(2)
-
-        with export_col1:
-            csv_data = results_to_csv(
-                sentences[:25] if len(sentences) > 1 else [input_text[:200]],
-                sentence_probs,
-                selected_model
-            )
+        ex1, ex2 = st.columns(2)
+        with ex1:
             st.download_button(
-                label="📥 Download Results as CSV",
-                data=csv_data,
-                file_name=f"detection_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                "📥 Download CSV",
+                data=results_to_csv(sentences[:30] if len(sentences)>1 else [input_text[:200]],
+                                    sentence_probs, selected_model),
+                file_name=f"detection_{datetime.now():%Y%m%d_%H%M%S}.csv",
                 mime="text/csv"
             )
-
-        with export_col2:
-            # PDF-style text report (plain text download as fallback)
-            report_lines = [
-                "AI-GENERATED TEXT DETECTION REPORT",
-                f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                f"Model: {selected_model}",
-                "=" * 50,
-                f"OVERALL VERDICT: {verdict}",
-                f"AI Probability:    {ai_pct:.1f}%",
-                f"Human Probability: {human_pct:.1f}%",
-                f"Confidence:        {confidence:.1f}%",
-                "",
-            ]
-            if len(sentence_probs) > 1:
-                report_lines += [
-                    "SENTENCE BREAKDOWN:",
-                    f"  AI sentences:       {n_ai}",
-                    f"  Human sentences:    {n_human}",
-                    f"  Uncertain:          {n_uncertain}",
-                    "",
-                    "SENTENCE DETAIL:",
-                ]
-                for i, (sent, prob) in enumerate(zip(sentences[:25], sentence_probs)):
-                    lbl = "AI" if prob >= 0.6 else "Human" if prob <= 0.4 else "Uncertain"
-                    report_lines.append(f"  S{i+1} [{lbl} {prob*100:.1f}%]: {sent[:80]}")
-            report_text = "\n".join(report_lines)
-            st.download_button(
-                label="📄 Download Report (TXT)",
-                data=report_text,
-                file_name=f"detection_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain"
-            )
+        with ex2:
+            report = (f"AI TEXT DETECTION REPORT\n{datetime.now():%Y-%m-%d %H:%M}\n"
+                      f"Model: {selected_model}\n{'='*45}\n"
+                      f"VERDICT: {verdict}\nAI: {ai_pct:.1f}%  Human: {100-ai_pct:.1f}%\n")
+            st.download_button("📄 Download Report",
+                               data=report,
+                               file_name=f"report_{datetime.now():%Y%m%d_%H%M%S}.txt",
+                               mime="text/plain")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# MODE 2 — COMPARISON MODE
+# MODE 2 — HUMAN vs AI LAB
 # ══════════════════════════════════════════════════════════════════════════════
-elif mode == "Comparison Mode":
-
-    st.subheader("⚖️ Comparison Mode — Two Texts Side by Side")
-    st.info("Paste two different texts to compare their AI detection scores directly.")
-
-    col_left, col_right = st.columns(2)
-    with col_left:
-        st.markdown("**Text A**")
-        text_a = st.text_area("Text A", height=250, key="text_a",
-                               placeholder="Paste first text here...")
-        if text_a:
-            st.caption(f"{len(text_a):,} characters")
-    with col_right:
-        st.markdown("**Text B**")
-        text_b = st.text_area("Text B", height=250, key="text_b",
-                               placeholder="Paste second text here...")
-        if text_b:
-            st.caption(f"{len(text_b):,} characters")
-
-    if st.button("🔍 Compare Both Texts", type="primary",
-                 disabled=not (bool(text_a.strip()) and bool(text_b.strip()))):
-
-        with st.spinner("Analysing both texts..."):
-            label_a, prob_a, err_a = predict_text(text_a, selected_model)
-            label_b, prob_b, err_b = predict_text(text_b, selected_model)
-            if prob_a is None: prob_a = 0.5
-            if prob_b is None: prob_b = 0.5
-
-        col_left, col_right = st.columns(2)
-        with col_left:
-            verdict_a = "🔴 AI-Generated" if label_a == 1 else "🟢 Human-Written"
-            st.metric("Text A Verdict", verdict_a)
-            st.metric("AI Probability", f"{prob_a*100:.1f}%")
-            st.markdown(traffic_light_html(prob_a * 100), unsafe_allow_html=True)
-        with col_right:
-            verdict_b = "🔴 AI-Generated" if label_b == 1 else "🟢 Human-Written"
-            st.metric("Text B Verdict", verdict_b)
-            st.metric("AI Probability", f"{prob_b*100:.1f}%",
-                      delta=f"{(prob_b - prob_a)*100:+.1f}%")
-            st.markdown(traffic_light_html(prob_b * 100), unsafe_allow_html=True)
-
-        fig, ax = plt.subplots(figsize=(7, 4))
-        bar_colours = ["#dc3545" if prob_a >= 0.5 else "#28a745",
-                       "#dc3545" if prob_b >= 0.5 else "#28a745"]
-        bars = ax.bar(["Text A", "Text B"], [prob_a * 100, prob_b * 100],
-                      color=bar_colours, edgecolor="white", width=0.4)
-        ax.axhline(y=50, color="black", linestyle="--", linewidth=1.2,
-                   label="Decision boundary (50%)")
-        ax.set_ylim(0, 110)
-        ax.set_ylabel("AI Probability (%)")
-        ax.set_title("AI Probability Comparison", fontweight="bold")
-        ax.bar_label(bars, labels=[f"{prob_a*100:.1f}%", f"{prob_b*100:.1f}%"],
-                     padding=4, fontsize=12, fontweight="bold")
-        ax.legend()
-        st.pyplot(fig)
-        plt.close()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# MODE 3 — ATTACK SIMULATION
-# ══════════════════════════════════════════════════════════════════════════════
-elif mode == "Attack Simulation":
-
-    st.subheader("⚔️ Attack Simulation — Paraphrase and Re-Detect")
+elif mode == "👥 Human vs AI Lab":
+    st.subheader("👥 Human vs AI Lab — Side-by-Side Comparison")
     st.markdown("""
     <div class="key-finding">
-    📌 <strong>Key dissertation finding:</strong> The QuillBot-style diversified paraphrase attack
-    reduces RoBERTa's AI detection recall from <strong>99.95% → 86.6%</strong> — an
-    Attack Success Rate of <strong>13.4%</strong>. Pegasus (beam-search paraphrase) only achieves 1.2% ASR.
-    This demo replicates the QuillBot-style attack (T5_Paraphrase_Paws, top-k sampling) live.
+    📌 Paste a <strong>human-written</strong> text on the left and an <strong>AI-generated</strong> text
+    on the right — or load a sample pair — then analyse both with all 5 models simultaneously.
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("")
+    # Sample loader
+    sample_col1, sample_col2, _ = st.columns([2, 2, 1])
+    with sample_col1:
+        h_sample = st.selectbox("Load human text sample", ["— paste your own —"] + list(SAMPLE_HUMAN_TEXTS.keys()), key="h_samp")
+    with sample_col2:
+        a_sample = st.selectbox("Load AI text sample",    ["— paste your own —"] + list(SAMPLE_AI_TEXTS.keys()),    key="a_samp")
+
+    default_human = SAMPLE_HUMAN_TEXTS.get(h_sample, "") if h_sample != "— paste your own —" else ""
+    default_ai    = SAMPLE_AI_TEXTS.get(a_sample, "")    if a_sample != "— paste your own —" else ""
+
+    col_h, col_a = st.columns(2)
+
+    with col_h:
+        st.markdown('<p class="lab-header-human">🧑 HUMAN-WRITTEN TEXT</p>', unsafe_allow_html=True)
+        human_text = st.text_area(
+            "Human text",
+            value=default_human,
+            height=260,
+            placeholder="Paste human-written text here, or choose a sample above…",
+            key="lab_human",
+            label_visibility="collapsed"
+        )
+        if human_text:
+            st.caption(f"{len(human_text):,} chars · {len(human_text.split()):,} words")
+
+    with col_a:
+        st.markdown('<p class="lab-header-ai">🤖 AI-GENERATED TEXT</p>', unsafe_allow_html=True)
+        ai_text = st.text_area(
+            "AI text",
+            value=default_ai,
+            height=260,
+            placeholder="Paste AI-generated text here, or choose a sample above…",
+            key="lab_ai",
+            label_visibility="collapsed"
+        )
+        if ai_text:
+            st.caption(f"{len(ai_text):,} chars · {len(ai_text.split()):,} words")
+
+    run_all = st.toggle("Run all 5 models simultaneously", value=True)
+
+    btn_disabled = not (bool(human_text.strip()) and bool(ai_text.strip()))
+    if st.button("⚡ Analyse Both Texts", type="primary", disabled=btn_disabled):
+
+        models_to_run = list(MODEL_OPTIONS.keys()) if run_all else [selected_model]
+
+        with st.spinner("Running models on both texts…"):
+            h_results = {}
+            a_results = {}
+            for mk in models_to_run:
+                h_results[mk] = predict_text(human_text, mk)
+                a_results[mk] = predict_text(ai_text,   mk)
+
+        st.markdown("---")
+        st.subheader("📊 Results")
+
+        # Quick verdict row
+        v_cols = st.columns(len(models_to_run))
+        for i, mk in enumerate(models_to_run):
+            _, h_prob, _ = h_results[mk]
+            _, a_prob, _ = a_results[mk]
+            if h_prob is None: h_prob = 0.5
+            if a_prob is None: a_prob = 0.5
+            with v_cols[i]:
+                h_lbl = "🟢 Human" if h_prob < 0.5 else "🔴 AI"
+                a_lbl = "🟢 Human" if a_prob < 0.5 else "🔴 AI"
+                correct = (h_prob < 0.5) and (a_prob >= 0.5)
+                chk = "✅" if correct else "⚠️"
+                st.markdown(
+                    f'<div style="border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center">'
+                    f'<div style="font-size:0.78rem;font-weight:700;color:#555;margin-bottom:6px">{mk}</div>'
+                    f'<div style="color:#155724">Human text: {h_lbl} ({h_prob*100:.0f}%)</div>'
+                    f'<div style="color:#721c24">AI text: {a_lbl} ({a_prob*100:.0f}%)</div>'
+                    f'<div style="margin-top:6px;font-size:0.85rem">{chk} {"Correct" if correct else "Error"}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+        st.markdown("---")
+
+        # Side-by-side detailed comparison
+        dc_h, dc_a = st.columns(2)
+
+        with dc_h:
+            st.markdown("### 🧑 Human Text")
+            for mk in models_to_run:
+                _, prob, err = h_results[mk]
+                if prob is None: prob = 0.5
+                colour = "#28a745" if prob < 0.5 else "#dc3545"
+                lbl    = "Human" if prob < 0.5 else "AI"
+                st.markdown(
+                    f'<div style="margin:6px 0;padding:10px;background:#f8f9fa;border-radius:6px;border-left:4px solid {colour}">'
+                    f'<strong style="font-size:0.85rem">{mk}</strong><br>'
+                    f'{prob_bar_html(prob)}'
+                    f'<span style="font-size:0.82rem;font-weight:700;color:{colour}">→ {lbl}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+        with dc_a:
+            st.markdown("### 🤖 AI Text")
+            for mk in models_to_run:
+                _, prob, err = a_results[mk]
+                if prob is None: prob = 0.5
+                colour = "#28a745" if prob < 0.5 else "#dc3545"
+                lbl    = "Human" if prob < 0.5 else "AI"
+                st.markdown(
+                    f'<div style="margin:6px 0;padding:10px;background:#f8f9fa;border-radius:6px;border-left:4px solid {colour}">'
+                    f'<strong style="font-size:0.85rem">{mk}</strong><br>'
+                    f'{prob_bar_html(prob)}'
+                    f'<span style="font-size:0.82rem;font-weight:700;color:{colour}">→ {lbl}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+
+        # Comparison bar chart
+        st.markdown("---")
+        if models_to_run:
+            fig, ax = plt.subplots(figsize=(max(8, len(models_to_run) * 1.8), 5))
+            x      = np.arange(len(models_to_run))
+            width  = 0.35
+            h_probs = [max(h_results[mk][1] or 0, 0) * 100 for mk in models_to_run]
+            a_probs = [max(a_results[mk][1] or 0, 0) * 100 for mk in models_to_run]
+            b1 = ax.bar(x - width/2, h_probs, width, label="Human Text", color="#28a745", alpha=0.85, edgecolor="white")
+            b2 = ax.bar(x + width/2, a_probs, width, label="AI Text",    color="#dc3545", alpha=0.85, edgecolor="white")
+            ax.axhline(y=50, color="black", linestyle="--", linewidth=1.2, label="Decision boundary (50%)")
+            ax.set_xticks(x)
+            ax.set_xticklabels(models_to_run, rotation=20, ha="right")
+            ax.set_ylim(0, 115)
+            ax.set_ylabel("AI Probability Score (%)")
+            ax.set_title("AI Probability: Human Text vs AI-Generated Text — All Models",
+                         fontweight="bold", fontsize=12)
+            ax.bar_label(b1, labels=[f"{v:.0f}%" for v in h_probs], padding=3, fontsize=9, fontweight="bold")
+            ax.bar_label(b2, labels=[f"{v:.0f}%" for v in a_probs], padding=3, fontsize=9, fontweight="bold")
+            ax.legend()
+            plt.tight_layout()
+            st.pyplot(fig); plt.close()
+
+        # Correct classification summary
+        n_correct  = sum(1 for mk in models_to_run
+                         if (h_results[mk][1] or 0.5) < 0.5 and (a_results[mk][1] or 0.5) >= 0.5)
+        n_total    = len(models_to_run)
+        acc_str    = f"{n_correct}/{n_total} models correctly classified both texts"
+        box_class  = "success-box" if n_correct == n_total else "warning-box"
+        st.markdown(f'<div class="{box_class}">📊 <strong>{acc_str}</strong></div>', unsafe_allow_html=True)
+
+        # AI phrase scan on both texts
+        found_h = [p for p in AI_PHRASES if p in human_text.lower()]
+        found_a = [p for p in AI_PHRASES if p in ai_text.lower()]
+        st.markdown("---")
+        fh1, fh2 = st.columns(2)
+        with fh1:
+            if found_h:
+                st.markdown(f'<div class="warning-box">⚠️ Human text contains AI-style phrases: <em>{", ".join(found_h)}</em></div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="success-box">✅ Human text: no AI phrase patterns detected.</div>', unsafe_allow_html=True)
+        with fh2:
+            if found_a:
+                st.markdown(f'<div class="danger-box">🤖 AI text contains AI-style phrases: <em>{", ".join(found_a)}</em></div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="warning-box">⚠️ AI text: no AI phrase patterns — it may be well-disguised or paraphrased.</div>', unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODE 3 — GENERATE & DETECT
+# ══════════════════════════════════════════════════════════════════════════════
+elif mode == "🤖 Generate & Detect":
+    st.subheader("🤖 Generate & Detect — AI Text Generation + Detection")
+    st.markdown("""
+    <div class="key-finding">
+    📌 Enter a topic or question. This tool generates an AI response using
+    <strong>DistilGPT-2</strong> (82M params, auto-regressive LM), then analyses it alongside
+    your own human-written response. See how our detectors handle freshly generated AI text.
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.info("**DistilGPT-2** is a small, fast model (~350 MB). First load takes ~30 seconds. "
+            "Text quality is lower than ChatGPT but sufficient to demonstrate AI detection.", icon="⚡")
+
+    # Preset topics
+    preset_topics = [
+        "custom",
+        "the impact of social media on mental health",
+        "the causes of the First World War",
+        "how artificial intelligence is changing healthcare",
+        "the advantages and disadvantages of renewable energy",
+        "the role of exercise in maintaining good health",
+        "climate change and its effects on global ecosystems",
+    ]
+
+    preset = st.selectbox("Choose a topic preset (or type your own below)", preset_topics)
+
+    if preset == "custom":
+        topic = st.text_input("Your topic / question", placeholder="e.g. 'the impact of smartphones on education'")
+    else:
+        topic = preset
+        st.text_input("Topic (editable)", value=topic, key="topic_edit")
+        topic = st.session_state.get("topic_edit", topic)
+
+    gen_len = st.slider("AI response length (tokens)", 80, 250, 160, 10)
+
+    col_gen, col_human = st.columns(2)
+
+    with col_gen:
+        st.markdown("#### 🤖 AI-Generated Response")
+        if "generated_text" not in st.session_state:
+            st.session_state.generated_text = ""
+
+        if st.button("⚡ Generate AI Text", type="primary", disabled=not bool(topic.strip())):
+            with st.spinner("Generating with DistilGPT-2… (first run downloads 350 MB)"):
+                try:
+                    st.session_state.generated_text = generate_ai_text(topic, gen_len)
+                except Exception as e:
+                    st.session_state.generated_text = ""
+                    st.error(f"Generation failed: {e}")
+
+        generated_display = st.text_area(
+            "Generated text (editable)",
+            value=st.session_state.generated_text,
+            height=230,
+            key="gen_display",
+            placeholder="Click 'Generate AI Text' above to fill this box…"
+        )
+        if generated_display:
+            st.caption(f"{len(generated_display):,} chars · {len(generated_display.split()):,} words")
+            found_a = [p for p in AI_PHRASES if p in generated_display.lower()]
+            if found_a:
+                st.markdown(
+                    f'<div class="danger-box" style="font-size:0.82rem">🤖 AI patterns found: {", ".join(found_a)}</div>',
+                    unsafe_allow_html=True)
+
+    with col_human:
+        st.markdown("#### 🧑 Your Human Response")
+        human_gen_text = st.text_area(
+            "Write your own response to the same topic",
+            height=230,
+            placeholder=f"Write your own answer about '{topic[:50]}…' here in your natural voice…",
+            key="human_gen"
+        )
+        if human_gen_text:
+            st.caption(f"{len(human_gen_text):,} chars · {len(human_gen_text.split()):,} words")
+            found_h = [p for p in AI_PHRASES if p in human_gen_text.lower()]
+            if found_h:
+                st.markdown(
+                    f'<div class="warning-box" style="font-size:0.82rem">⚠️ AI-style patterns in your text: {", ".join(found_h)}</div>',
+                    unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="success-box" style="font-size:0.82rem">✅ Your text looks human-written.</div>', unsafe_allow_html=True)
+
+    both_ready = bool(generated_display.strip()) and bool(human_gen_text.strip())
+
+    if st.button("🔬 Detect Both — Run All 5 Models", type="primary", disabled=not both_ready):
+
+        with st.spinner("Running all 5 models on both texts…"):
+            gen_results = {}
+            hum_results = {}
+            for mk in MODEL_OPTIONS:
+                gen_results[mk] = predict_text(generated_display, mk)
+                hum_results[mk] = predict_text(human_gen_text,   mk)
+
+        st.markdown("---")
+        st.subheader("📊 Detection Results")
+
+        # Summary table
+        rows = []
+        for mk in MODEL_OPTIONS:
+            _, g_prob, _ = gen_results[mk]
+            _, h_prob, _ = hum_results[mk]
+            if g_prob is None: g_prob = 0.5
+            if h_prob is None: h_prob = 0.5
+            g_lbl = "🔴 AI" if g_prob >= 0.5 else "🟢 Human"
+            h_lbl = "🔴 AI" if h_prob >= 0.5 else "🟢 Human"
+            correct = (g_prob >= 0.5) and (h_prob < 0.5)
+            rows.append({
+                "Model": mk,
+                "AI Text Score": f"{g_prob*100:.1f}%",
+                "AI Text Verdict": g_lbl,
+                "Human Text Score": f"{h_prob*100:.1f}%",
+                "Human Text Verdict": h_lbl,
+                "Both Correct": "✅ Yes" if correct else "❌ No",
+            })
+
+        result_df = pd.DataFrame(rows)
+
+        def highlight_correct(row):
+            colour = "#d4edda" if "Yes" in row["Both Correct"] else "#fde8e8"
+            return [f"background-color: {colour}"] * len(row)
+
+        st.dataframe(result_df.style.apply(highlight_correct, axis=1),
+                     use_container_width=True, hide_index=True)
+
+        # Bar chart
+        fig, ax = plt.subplots(figsize=(10, 5))
+        model_names = list(MODEL_OPTIONS.keys())
+        x      = np.arange(len(model_names))
+        width  = 0.35
+        g_prbs = [max(gen_results[mk][1] or 0, 0) * 100 for mk in model_names]
+        h_prbs = [max(hum_results[mk][1] or 0, 0) * 100 for mk in model_names]
+        b1 = ax.bar(x - width/2, g_prbs, width, label="AI Text (DistilGPT-2)", color="#dc3545", alpha=0.85)
+        b2 = ax.bar(x + width/2, h_prbs, width, label="Human Text",            color="#28a745", alpha=0.85)
+        ax.axhline(y=50, color="black", linestyle="--", linewidth=1.2, label="Decision boundary")
+        ax.set_xticks(x); ax.set_xticklabels(model_names, rotation=20, ha="right")
+        ax.set_ylim(0, 115); ax.set_ylabel("AI Probability Score (%)")
+        ax.set_title("Generate & Detect: AI Score for AI Text vs Human Text", fontweight="bold")
+        ax.bar_label(b1, labels=[f"{v:.0f}%" for v in g_prbs], padding=3, fontsize=9, fontweight="bold")
+        ax.bar_label(b2, labels=[f"{v:.0f}%" for v in h_prbs], padding=3, fontsize=9, fontweight="bold")
+        ax.legend(); plt.tight_layout()
+        st.pyplot(fig); plt.close()
+
+        n_correct = sum(1 for mk in MODEL_OPTIONS
+                        if (gen_results[mk][1] or 0.5) >= 0.5 and (hum_results[mk][1] or 0.5) < 0.5)
+        st.markdown(
+            f'<div class="{"success-box" if n_correct >= 3 else "warning-box"}">'
+            f'📊 <strong>{n_correct}/5 models correctly distinguished the AI text from the human text.</strong>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+
+        st.markdown("""
+        <div class="key-finding">
+        💡 <strong>Dissertation context:</strong> These models were trained on ChatGPT output (HC3 dataset).
+        DistilGPT-2 uses a different generation strategy but shares statistical regularities with other LLMs —
+        high token repetition probability, formulaic sentence structures, and lower lexical diversity.
+        This is why the detectors generalise beyond their training distribution.
+        </div>
+        """, unsafe_allow_html=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODE 4 — ATTACK SIMULATION
+# ══════════════════════════════════════════════════════════════════════════════
+elif mode == "⚔️ Attack Simulation":
+    st.subheader("⚔️ Attack Simulation — Adversarial Paraphrase")
+    st.markdown("""
+    <div class="key-finding">
+    📌 <strong>Dissertation finding:</strong> The QuillBot-style attack (T5_Paraphrase_Paws,
+    top-k=200 sampling) reduces RoBERTa recall <strong>99.95% → 86.6%</strong> (ASR=13.4%).
+    Pegasus (beam-search) only achieves 1.2% ASR — diversity of rewriting is what defeats detectors.
+    This demo runs the QuillBot-style attack live on any text you paste.
+    </div>
+    """, unsafe_allow_html=True)
+
     input_text = st.text_area(
         "Paste AI-generated text to attack",
         height=200,
-        placeholder="Paste AI-generated text here to simulate the paraphrase attack..."
+        placeholder="Paste AI-generated text here to see how the paraphrase attack affects detection…"
     )
 
-    if st.button("⚔️ Run Attack Simulation", type="primary",
-                 disabled=not bool(input_text.strip())):
+    # Show known ASR results for reference
+    with st.expander("📊 Known ASR results from dissertation experiments"):
+        asr_df = pd.DataFrame([
+            {"Model": "RoBERTa-base",  "Pegasus ASR": "1.2%",  "QuillBot ASR": "13.4%", "ChatGPT ASR": "1.6%"},
+            {"Model": "BERT-base",     "Pegasus ASR": "1.8%",  "QuillBot ASR": "12.2%", "ChatGPT ASR": "3.2%"},
+            {"Model": "DistilBERT",    "Pegasus ASR": "5.2%",  "QuillBot ASR": "19.0%", "ChatGPT ASR": "6.8%"},
+            {"Model": "Hello-SimpleAI","Pegasus ASR": "0.4%",  "QuillBot ASR": "14.0%", "ChatGPT ASR": "2.8%"},
+            {"Model": "LR+TF-IDF",    "Pegasus ASR": "29.0%", "QuillBot ASR": "26.8%", "ChatGPT ASR": "39.4%"},
+            {"Model": "H1-BiLSTM",    "Pegasus ASR": "1.4%",  "QuillBot ASR": "4.8%",  "ChatGPT ASR": "2.2%"},
+        ])
+        st.dataframe(asr_df, use_container_width=True, hide_index=True)
+
+    if st.button("⚔️ Run Paraphrase Attack", type="primary", disabled=not bool(input_text.strip())):
 
         col1, col2 = st.columns(2)
 
-        # Score original text
         with col1:
-            st.markdown("### BEFORE attack")
-            with st.spinner("Classifying original text..."):
-                label_orig, prob_orig, err_orig = predict_text(input_text, selected_model)
-                if prob_orig is None:
-                    prob_orig = 0.95
-            verdict_orig = "🔴 AI-Generated" if (label_orig or 1) == 1 else "🟢 Human-Written"
-            st.metric("Verdict",        verdict_orig)
-            st.metric("AI Probability", f"{prob_orig*100:.1f}%")
-            st.markdown(traffic_light_html(prob_orig * 100), unsafe_allow_html=True)
-            st.text_area("Original text", input_text[:500], height=180, disabled=True)
+            st.markdown("### 📄 BEFORE Attack")
+            with st.spinner("Classifying original…"):
+                label_o, prob_o, _ = predict_text(input_text, selected_model)
+                if prob_o is None: prob_o = 0.92
+            st.markdown(verdict_box(label_o or 1, prob_o), unsafe_allow_html=True)
+            st.markdown(traffic_light_html(prob_o * 100), unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            c1.metric("AI Score", f"{prob_o*100:.1f}%")
+            c2.metric("Verdict", "AI-Generated" if (label_o or 1) == 1 else "Human")
+            st.text_area("Original", input_text[:600], height=160, disabled=True)
 
-        # Run paraphrase attack then re-score
         with col2:
-            st.markdown("### AFTER QuillBot-style attack")
-            with st.spinner("Running QuillBot-style paraphraser (T5_Paraphrase_Paws, may take 30–60 sec)..."):
+            st.markdown("### 🔄 AFTER QuillBot-Style Attack")
+            with st.spinner("Running T5_Paraphrase_Paws (top-k=200, first run ~60s)…"):
                 try:
-                    from transformers import T5ForConditionalGeneration, T5Tokenizer
-
-                    @st.cache_resource(show_spinner=False)
-                    def load_paraphraser():
-                        """Cache the T5 paraphrase model to avoid reloading."""
-                        tok = T5Tokenizer.from_pretrained("Vamsi/T5_Paraphrase_Paws")
-                        mod = T5ForConditionalGeneration.from_pretrained("Vamsi/T5_Paraphrase_Paws")
-                        mod = mod.to(DEVICE)
-                        mod.eval()
-                        return tok, mod
-
-                    para_tok, para_mod = load_paraphraser()
-                    short_text = " ".join(input_text.split()[:80])
-                    enc = para_tok(f"paraphrase: {short_text} </s>",
-                                   return_tensors="pt", max_length=256, truncation=True)
+                    ptok, pmod = load_paraphraser()
+                    short = " ".join(input_text.split()[:80])
+                    enc = ptok(f"paraphrase: {short} </s>",
+                               return_tensors="pt", max_length=256, truncation=True)
                     with torch.no_grad():
-                        out = para_mod.generate(
-                            **{k: v.to(DEVICE) for k, v in enc.items()},
-                            max_length=256, do_sample=True, top_k=200, top_p=0.95
-                        )
-                    rewritten  = para_tok.decode(out[0], skip_special_tokens=True)
-                    para_error = None
+                        out = pmod.generate(**{k: v.to(DEVICE) for k, v in enc.items()},
+                                            max_length=256, do_sample=True, top_k=200, top_p=0.95)
+                    rewritten = ptok.decode(out[0], skip_special_tokens=True)
+                    para_err  = None
                 except Exception as e:
-                    rewritten  = input_text
-                    para_error = str(e)
+                    rewritten = input_text; para_err = str(e)
 
-            label_rew, prob_rew, _ = predict_text(rewritten, selected_model)
-            if prob_rew is None:
-                prob_rew = 0.08
+            label_r, prob_r, _ = predict_text(rewritten, selected_model)
+            if prob_r is None: prob_r = 0.08
 
-            verdict_rew = "🔴 AI-Generated" if (label_rew or 0) == 1 else "🟢 Human-Written"
-            st.metric("Verdict",        verdict_rew)
-            st.metric("AI Probability", f"{prob_rew*100:.1f}%",
-                      delta=f"{(prob_rew - prob_orig)*100:+.1f}%")
-            st.markdown(traffic_light_html(prob_rew * 100), unsafe_allow_html=True)
-            st.text_area("Rewritten text", rewritten[:500], height=180, disabled=True)
+            st.markdown(verdict_box(label_r or 0, prob_r), unsafe_allow_html=True)
+            st.markdown(traffic_light_html(prob_r * 100), unsafe_allow_html=True)
+            c1, c2 = st.columns(2)
+            c1.metric("AI Score", f"{prob_r*100:.1f}%", delta=f"{(prob_r-prob_o)*100:+.1f}%",
+                      delta_color="inverse")
+            c2.metric("Verdict", "AI-Generated" if (label_r or 0) == 1 else "Human")
+            st.text_area("Rewritten", rewritten[:600], height=160, disabled=True)
+            if para_err:
+                st.warning(f"Paraphraser error: {para_err}")
 
-            if para_error:
-                st.warning(f"Paraphraser unavailable ({para_error}). "
-                           "Install via: pip install transformers sentencepiece")
-
-        # Before/after bar chart
+        # Before/after chart
         st.markdown("---")
         fig, ax = plt.subplots(figsize=(8, 4))
-        bars = ax.bar(["Before Attack", "After Attack"],
-                      [prob_orig * 100, prob_rew * 100],
-                      color=["#dc3545", "#28a745" if prob_rew < 0.5 else "#ffc107"],
-                      edgecolor="white", width=0.4)
+        clr_r  = "#28a745" if prob_r < 0.5 else "#ffc107"
+        bars   = ax.bar(["Before Attack", "After Attack"],
+                        [prob_o * 100, prob_r * 100],
+                        color=["#dc3545", clr_r], edgecolor="white", width=0.4)
         ax.axhline(y=50, color="black", linestyle="--", linewidth=1.2, label="Decision boundary")
-        ax.set_ylim(0, 110)
-        ax.set_ylabel("AI Probability (%)")
-        ax.set_title("Detection Score: Before vs After QuillBot-Style Paraphrase Attack",
-                     fontweight="bold")
-        ax.bar_label(bars, labels=[f"{prob_orig*100:.1f}%", f"{prob_rew*100:.1f}%"],
+        ax.set_ylim(0, 110); ax.set_ylabel("AI Probability (%)")
+        ax.set_title(f"QuillBot-Style Attack on {selected_model}", fontweight="bold")
+        ax.bar_label(bars, labels=[f"{prob_o*100:.1f}%", f"{prob_r*100:.1f}%"],
                      padding=4, fontsize=13, fontweight="bold")
-        ax.legend()
-        st.pyplot(fig)
-        plt.close()
+        ax.legend(); st.pyplot(fig); plt.close()
 
-        drop = (prob_orig - prob_rew) * 100
-        if drop > 0:
+        drop = (prob_o - prob_r) * 100
+        if drop > 5:
             st.markdown(
-                f'<div class="success-box">✅ Attack reduced AI detection probability by '
-                f'<strong>{drop:.1f} percentage points</strong>. '
-                f'This replicates the dissertation finding.</div>',
+                f'<div class="success-box">✅ Attack dropped AI score by <strong>{drop:.1f} pp</strong>. '
+                f'{"Detection EVADED" if prob_r < 0.5 else "Detection maintained but weakened"}.</div>',
                 unsafe_allow_html=True)
         else:
             st.markdown(
-                '<div class="warning-box">⚠️ Attack did not reduce detection probability. '
-                'The text remains detectable.</div>',
+                '<div class="warning-box">⚠️ Attack had minimal effect — detector is robust on this sample.</div>',
                 unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# MODE 4 — HYBRID MODEL COMPARISON
+# MODE 5 — MODEL EXPLORER
 # ══════════════════════════════════════════════════════════════════════════════
-elif mode == "🔬 Hybrid Model Comparison":
+elif mode == "📚 Model Explorer":
+    st.subheader("📚 Model Explorer — Detailed Architecture & Results")
+    st.markdown("Deep-dive into all 9 models evaluated in this dissertation: architecture, training, performance, and adversarial robustness.")
 
-    st.subheader("🔬 Hybrid Model Comparison — Novel Contribution")
+    view = st.radio("Show", ["All Models", "Individual Only", "Hybrid Only"], horizontal=True)
 
+    for mk, card in MODEL_CARDS.items():
+        if view == "Individual Only" and card["category"] != "Individual": continue
+        if view == "Hybrid Only"    and card["category"] != "Hybrid":     continue
+
+        card_class = "model-card-hyb" if card["category"] == "Hybrid" else "model-card-ind"
+        badge_cls  = "badge-hyb"      if card["category"] == "Hybrid" else "badge-ind"
+
+        with st.expander(
+            f"{'🔬' if card['category']=='Hybrid' else '🤖'} {card['label']}",
+            expanded=False
+        ):
+            # Header row
+            st.markdown(
+                f'<span class="{badge_cls}">{card["category"]}</span> '
+                f'&nbsp;<code style="font-size:0.82rem">{card.get("hf_id","")}</code>',
+                unsafe_allow_html=True
+            )
+
+            # Description
+            if "why" in card:
+                st.markdown(f"**Why this architecture?** {card['why']}")
+
+            st.markdown(f"**Architecture:** {card['arch']}")
+            st.markdown(f"**Base:** {card['base']}")
+
+            # Training details table
+            col_t, col_m = st.columns([1, 1])
+            with col_t:
+                st.markdown("**Training**")
+                st.markdown(f"""
+                | Setting | Value |
+                |---------|-------|
+                | Method | {card['train'].split('·')[0].strip()} |
+                | Device | {card['device']} |
+                | Trainable params | {card['trainable']} |
+                """)
+
+            with col_m:
+                st.markdown("**Clean HC3 Performance**")
+                st.markdown(f"""
+                | Metric | Value |
+                |--------|-------|
+                | F1-Score | **{card['clean_f1']:.4f}** |
+                | Accuracy | {card['clean_acc']:.4f} |
+                | Recall | {card['clean_recall']:.4f} |
+                | Precision | {card['clean_prec']:.4f} |
+                | M4 F1 | {card['m4_f1']:.4f} |
+                """)
+
+            # ASR bar chart
+            fig, ax = plt.subplots(figsize=(6, 2.5))
+            attacks = ["Pegasus\n(beam-search)", "QuillBot\n(top-k sample)", "ChatGPT\n(rewrite)"]
+            asrs    = [card["peg_asr"], card["qui_asr"], card["cgpt_asr"]]
+            clrs    = ["#E53935" if a > 10 else "#FF9800" if a > 5 else "#4CAF50" for a in asrs]
+            bars    = ax.barh(attacks, asrs, color=clrs, edgecolor="white", height=0.5)
+            ax.axvline(x=10, color="black", linestyle="--", linewidth=1, alpha=0.5, label="10% threshold")
+            ax.set_xlim(0, max(asrs) + 5)
+            ax.set_xlabel("Attack Success Rate (%)")
+            ax.set_title(f"Adversarial Robustness — {card['label']}", fontsize=10, fontweight="bold")
+            ax.bar_label(bars, labels=[f"{v:.1f}%" for v in asrs], padding=3, fontsize=9, fontweight="bold")
+            ax.legend(fontsize=8); plt.tight_layout()
+            st.pyplot(fig); plt.close()
+
+            # Strength / weakness / reference
+            strength_col, weak_col = st.columns(2)
+            with strength_col:
+                st.markdown(f'<div class="success-box">✅ <strong>Strength:</strong><br>{card["strength"]}</div>', unsafe_allow_html=True)
+            with weak_col:
+                st.markdown(f'<div class="warning-box">⚠️ <strong>Weakness:</strong><br>{card["weakness"]}</div>', unsafe_allow_html=True)
+            st.caption(f"Reference: {card['ref']}")
+
+    # All-model comparison chart
+    st.markdown("---")
+    st.subheader("📊 All-Model Overview")
+
+    all_names = list(MODEL_CARDS.keys())
+    clean_f1s  = [MODEL_CARDS[m]["clean_f1"]  for m in all_names]
+    qui_asrs   = [MODEL_CARDS[m]["qui_asr"]   for m in all_names]
+    m4_f1s     = [MODEL_CARDS[m]["m4_f1"]     for m in all_names]
+    categories = [MODEL_CARDS[m]["category"]  for m in all_names]
+    colours    = ["#1565C0" if c == "Individual" else "#E65100" for c in categories]
+
+    short_names = [
+        "RoBERTa", "BERT", "DistilBERT", "Hello-SimpleAI", "Log.Reg.",
+        "H1-BiLSTM", "H2-TextCNN", "H3-Voting", "H4-Fusion"
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+
+    for ax, vals, title, ylim, pct in zip(
+        axes,
+        [clean_f1s, qui_asrs, m4_f1s],
+        ["Clean HC3 F1 Score", "QuillBot Attack ASR (Lower = Better)", "M4 Cross-Dataset F1"],
+        [(0.92, 1.01), (0, 42), (0.28, 0.82)],
+        [True, False, True]
+    ):
+        bars = ax.bar(range(len(all_names)), vals, color=colours, edgecolor="white")
+        ax.set_xticks(range(len(all_names)))
+        ax.set_xticklabels(short_names, rotation=35, ha="right", fontsize=9)
+        ax.set_ylim(*ylim)
+        ax.set_title(title, fontweight="bold", fontsize=10)
+        ax.bar_label(bars, labels=[f"{v:.2f}" if pct else f"{v:.1f}%" for v in vals],
+                     padding=2, fontsize=8, fontweight="bold")
+
+    from matplotlib.patches import Patch
+    fig.legend(
+        handles=[Patch(color="#1565C0", label="Individual"), Patch(color="#E65100", label="Hybrid")],
+        loc="upper center", ncol=2, fontsize=10, frameon=False, bbox_to_anchor=(0.5, 1.02)
+    )
+    plt.tight_layout(); st.pyplot(fig); plt.close()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODE 6 — HYBRID RESEARCH
+# ══════════════════════════════════════════════════════════════════════════════
+elif mode == "🔬 Hybrid Research":
+    st.subheader("🔬 Hybrid Model Research — Novel Architectures")
     st.markdown("""
     <div class="key-finding">
-    📌 <strong>Research contribution:</strong> Four hybrid architectures are introduced that combine
-    complementary detection signals. Each hybrid targets a different robustness limitation of
-    individual transformer models against adversarial rewriting attacks.
+    📌 <strong>Research contribution:</strong> Four hybrid architectures are introduced and evaluated
+    against the same three adversarial attacks. H1 (RoBERTa+BiLSTM) achieves the strongest adversarial
+    robustness: QuillBot ASR=<strong>4.8%</strong> vs 13.4% for plain RoBERTa — a 64% reduction.
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Architecture cards ────────────────────────────────────────────────────
+    # Hybrid architecture cards
     st.markdown("### Hybrid Architectures")
-    col1, col2 = st.columns(2)
+    h1, h2 = st.columns(2)
 
-    with col1:
-        st.markdown("""
-        **H1 — RoBERTa + BiLSTM** *(Notebook 14, Colab)*
-        - RoBERTa-base (frozen) → token embeddings
-        - Bidirectional LSTM (256 hidden, 2 layers)
-        - Captures sequential word-order dependencies
-        - *Reference: Schuster & Paliwal (1997) doi:10.1109/78.650093*
+    for col, hkey, icon in [(h1, "H1-RoBERTa+BiLSTM", "🔵"), (h2, "H2-BERT+TextCNN", "🟢")]:
+        with col:
+            c = MODEL_CARDS[hkey]
+            st.markdown(f"""
+            <div class="model-card-hyb">
+            <div class="badge-hyb">Hybrid</div>
+            <strong>{icon} {c['label']}</strong><br><br>
+            <small><b>Architecture:</b> {c['arch']}</small><br>
+            <small><b>Training:</b> {c['train']}</small><br>
+            <small><b>Trainable:</b> {c['trainable']}</small><br><br>
+            <b>Clean F1:</b> {c['clean_f1']:.4f} &nbsp;·&nbsp; <b>QuillBot ASR:</b> {c['qui_asr']}%<br>
+            <small><em>{c['strength']}</em></small>
+            </div>
+            """, unsafe_allow_html=True)
 
-        **H2 — BERT + TextCNN** *(Notebook 14, Colab)*
-        - BERT-base (frozen) → token embeddings
-        - Parallel CNN filters (kernel sizes 2, 3, 4)
-        - Detects characteristic AI n-gram phrases
-        - *Reference: Kim (2014) doi:10.3115/v1/D14-1181*
-        """)
+    h3, h4 = st.columns(2)
+    for col, hkey, icon in [(h3, "H3-SoftVoting", "🟡"), (h4, "H4-FeatureFusion", "🟠")]:
+        with col:
+            c = MODEL_CARDS[hkey]
+            st.markdown(f"""
+            <div class="model-card-hyb">
+            <div class="badge-hyb">Hybrid</div>
+            <strong>{icon} {c['label']}</strong><br><br>
+            <small><b>Architecture:</b> {c['arch']}</small><br>
+            <small><b>Training:</b> {c['train']}</small><br>
+            <small><b>Trainable:</b> {c['trainable']}</small><br><br>
+            <b>Clean F1:</b> {c['clean_f1']:.4f} &nbsp;·&nbsp; <b>QuillBot ASR:</b> {c['qui_asr']}%<br>
+            <small><em>{c['strength']}</em></small>
+            </div>
+            """, unsafe_allow_html=True)
 
-    with col2:
-        st.markdown("""
-        **H3 — Soft Voting Ensemble** *(Notebook 15, Local)*
-        - Averages probabilities from RoBERTa + BERT + DistilBERT
-        - No additional training — uses existing checkpoints
-        - Attack must fool all three models simultaneously
-        - *Reference: Lakshminarayanan et al. (2017) arXiv:1612.01474*
-
-        **H4 — Multi-Feature Fusion MLP** *(Notebook 15, Local)*
-        - RoBERTa prob + TF-IDF (500 features) + 6 statistical features
-        - MLP meta-classifier on 507-dim combined feature vector
-        - Multi-signal approach: semantic + vocabulary + stylometric
-        - *Reference: Verma et al. (2023) Ghostbuster arXiv:2305.15047*
-        """)
-
-    # ── Load hybrid results ───────────────────────────────────────────────────
+    # Load hybrid results
     st.markdown("---")
-    st.markdown("### Results")
+    st.markdown("### Experimental Results")
 
     HYBRID_RESULTS_PATH = os.path.join(PROJECT_ROOT, "results", "metrics", "all_results_with_hybrids.csv")
 
     if os.path.exists(HYBRID_RESULTS_PATH):
         hybrid_df = pd.read_csv(HYBRID_RESULTS_PATH)
-        st.success(f"Hybrid results loaded: {len(hybrid_df['model'].unique())} models evaluated.")
 
-        # ── Master comparison table ───────────────────────────────────────────
-        st.markdown("#### Master Results Table — All Models")
         summary_rows = []
         for model_name in hybrid_df["model"].unique():
             m = hybrid_df[hybrid_df["model"] == model_name]
-            clean_f1  = m[m["dataset"] == "HC3-Clean"]["f1"].values
-            peg_asr   = m[m["dataset"] == "Pegasus-Attack"]["attack_success"].values
-            qui_asr   = m[m["dataset"] == "QuillBot-Attack"]["attack_success"].values
-            cha_asr   = m[m["dataset"] == "ChatGPT-Attack"]["attack_success"].values
-            m4_f1     = m[m["dataset"] == "Cross-Dataset"]["f1"].values
-            model_type = "Hybrid" if any(model_name.startswith(h) for h in ["H1-", "H2-", "H3-", "H4-"]) else "Individual"
+            clean_f1 = m[m["dataset"] == "HC3-Clean"]["f1"].values
+            peg_asr  = m[m["dataset"] == "Pegasus-Attack"]["attack_success"].values
+            qui_asr  = m[m["dataset"] == "QuillBot-Attack"]["attack_success"].values
+            cha_asr  = m[m["dataset"] == "ChatGPT-Attack"]["attack_success"].values
+            m4_f1    = m[m["dataset"] == "Cross-Dataset"]["f1"].values
+            mtype    = "Hybrid" if any(model_name.startswith(h) for h in ["H1-","H2-","H3-","H4-"]) else "Individual"
             summary_rows.append({
                 "Model":        model_name,
-                "Type":         model_type,
+                "Type":         mtype,
                 "Clean F1":     round(float(clean_f1[0]), 4) if len(clean_f1) else None,
-                "Pegasus ASR":  round(float(peg_asr[0]) * 100, 1) if len(peg_asr) else None,
-                "QuillBot ASR": round(float(qui_asr[0]) * 100, 1) if len(qui_asr) else None,
-                "ChatGPT ASR":  round(float(cha_asr[0]) * 100, 1) if len(cha_asr) else None,
+                "Pegasus ASR":  f"{round(float(peg_asr[0])*100,1)}%" if len(peg_asr) else None,
+                "QuillBot ASR": f"{round(float(qui_asr[0])*100,1)}%" if len(qui_asr) else None,
+                "ChatGPT ASR":  f"{round(float(cha_asr[0])*100,1)}%" if len(cha_asr) else None,
                 "M4 F1":        round(float(m4_f1[0]), 4) if len(m4_f1) else None,
             })
 
@@ -861,161 +1377,95 @@ elif mode == "🔬 Hybrid Model Comparison":
                 return ["background-color: #fff3e0"] * len(row)
             return [""] * len(row)
 
-        styled_table = summary_table.style.apply(highlight_hybrid, axis=1)
-        st.dataframe(styled_table, use_container_width=True, hide_index=True)
+        st.markdown("#### Master Results Table (9 Models)")
+        st.dataframe(summary_table.style.apply(highlight_hybrid, axis=1),
+                     use_container_width=True, hide_index=True)
 
-        # ── Clean F1 comparison chart ─────────────────────────────────────────
-        st.markdown("#### Clean F1 Comparison")
-        clean_data = summary_table.dropna(subset=["Clean F1"])
-        if len(clean_data) > 0:
-            fig, ax = plt.subplots(figsize=(12, 5))
-            colours = ["#2196F3" if t == "Individual" else "#FF9800"
-                       for t in clean_data["Type"]]
-            bars = ax.bar(clean_data["Model"], clean_data["Clean F1"] * 100,
-                          color=colours, edgecolor="white", width=0.6)
-            ax.set_title("F1-Score on HC3-Clean — Individual vs Hybrid Models",
-                         fontweight="bold", fontsize=12)
-            ax.set_ylabel("F1-Score (%)")
-            ax.set_ylim(85, 105)
-            ax.tick_params(axis="x", rotation=30)
-            ax.bar_label(bars, labels=[f"{v:.2f}%" for v in clean_data["Clean F1"] * 100],
-                         padding=3, fontsize=9, fontweight="bold")
-            from matplotlib.patches import Patch
-            ax.legend(handles=[
-                Patch(color="#2196F3", label="Individual models"),
-                Patch(color="#FF9800", label="Hybrid models (contribution)")
-            ])
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close()
+        # Load saved figures if available
+        fig_dir = os.path.join(PROJECT_ROOT, "results", "figures")
+        for fname, caption in [
+            ("fig_all9_models_clean_f1.png",          "Clean F1-Score comparison"),
+            ("fig_all9_models_asr_comparison.png",    "Attack Success Rate comparison"),
+            ("fig_all9_models_degradation_heatmap.png", "Performance degradation heatmap"),
+            ("fig_all9_models_radar_chart.png",       "Multi-axis robustness radar chart"),
+        ]:
+            fpath = os.path.join(fig_dir, fname)
+            if os.path.exists(fpath):
+                st.markdown(f"#### {caption}")
+                st.image(fpath, use_container_width=True)
 
-        # ── ASR comparison chart ──────────────────────────────────────────────
-        st.markdown("#### Attack Success Rate (Lower = More Robust)")
-        attack_cols = ["Pegasus ASR", "QuillBot ASR", "ChatGPT ASR"]
-        asr_data = summary_table.dropna(subset=attack_cols, how="all")
-        if len(asr_data) > 0:
-            x     = np.arange(len(asr_data))
-            width = 0.25
-            fig, ax = plt.subplots(figsize=(14, 5))
-            attack_colours = ["#E53935", "#8E24AA", "#1E88E5"]
-            for i, col in enumerate(attack_cols):
-                vals = asr_data[col].fillna(0).values
-                bars = ax.bar(x + i * width, vals, width,
-                              label=col.replace(" ASR", ""),
-                              color=attack_colours[i], edgecolor="white", alpha=0.85)
-                ax.bar_label(bars, labels=[f"{v:.1f}%" for v in vals],
-                             padding=2, fontsize=8)
-
-            ax.set_title("Attack Success Rate — All Models (Lower = Better Robustness)",
-                         fontweight="bold", fontsize=12)
-            ax.set_ylabel("Attack Success Rate (%)")
-            ax.set_ylim(0, 55)
-            ax.set_xticks(x + width)
-            ax.set_xticklabels(asr_data["Model"], rotation=30, ha="right")
-            ax.legend(title="Attack Type")
-            ax.axhline(y=0, color="black", linewidth=0.5)
-
-            # Shade hybrid model region
-            n_individual = sum(1 for t in asr_data["Type"] if t == "Individual")
-            ax.axvspan(n_individual - 0.4, len(asr_data) - 0.4,
-                       alpha=0.05, color="orange", label="Hybrid region")
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close()
-
-        # ── McNemar's test results ────────────────────────────────────────────
+        # McNemar's test
         mcnemar_path = os.path.join(PROJECT_ROOT, "results", "metrics", "mcnemar_test_results.csv")
         if os.path.exists(mcnemar_path):
             st.markdown("#### Statistical Significance — McNemar's Test")
-            st.caption("Tests whether performance differences between models are statistically significant. "
-                       "Reference: Dietterich (1998) doi:10.1162/089976698300017197")
+            st.caption("Dietterich (1998) doi:10.1162/089976698300017197 — tests whether classification differences are statistically significant (χ² test on disagreement cells; p<0.05 = significant).")
             mcn_df = pd.read_csv(mcnemar_path)
             st.dataframe(mcn_df, use_container_width=True, hide_index=True)
+            st.markdown("""
+            **Interpretation:**
+            - **RoBERTa vs H3**: p=0.899 — NOT significant. Soft voting adds no statistically meaningful benefit.
+            - **RoBERTa vs H4**: p=0.006 — SIGNIFICANT. H4 has different decision boundaries (but higher QuillBot ASR due to TF-IDF vulnerability).
+            - **H1-BiLSTM**: Not in McNemar test but shows largest ASR reduction (13.4%→4.8%).
+            """)
 
-        # ── Contribution statement ────────────────────────────────────────────
-        st.markdown("---")
         st.markdown("""
         <div class="key-finding">
-        📌 <strong>Research contribution summary:</strong><br>
-        Hybrid architectures demonstrate that adversarial robustness in AI-text detection
-        improves when complementary signal types are combined. Soft voting (H3) reduces
-        attack success by requiring failures across diverse models; feature fusion (H4)
-        maintains detection when semantic representations are disrupted. These results
-        directly address the research question: robustness limitations stem from single-modality
-        reliance, and architectural diversity is a viable mitigation strategy.
+        📌 <strong>Research conclusion:</strong> H1 (RoBERTa+BiLSTM) achieves the best adversarial
+        robustness, reducing QuillBot ASR by 64%. The BiLSTM captures sequential word-order signals
+        that vocabulary substitution cannot fully disrupt. H3 (Soft Voting) provides no significant
+        benefit because all three transformers share the same vocabulary-level vulnerability.
+        H4's TF-IDF features are a liability under QuillBot attack — worsening ASR from 13.4% to 16.0%.
         </div>
         """, unsafe_allow_html=True)
 
     else:
-        st.warning("Hybrid results not found. Run the following notebooks first:")
-        st.markdown("""
-        1. **Notebook 14** (Google Colab) — Train H1 (RoBERTa+BiLSTM) and H2 (BERT+TextCNN)
-        2. Download `results/metrics/hybrid_nb14_results.csv` from Drive to local `results/metrics/`
-        3. **Notebook 15** (Local) — Train H3 (Soft Voting) and H4 (Feature Fusion MLP)
-
-        Then refresh this page — results will load automatically from:
-        `results/metrics/all_results_with_hybrids.csv`
-        """)
-
-        st.markdown("### Expected Results (Placeholder)")
-        placeholder_data = {
-            "Model":        ["RoBERTa-base", "BERT-base", "DistilBERT", "H1-RoBERTa+BiLSTM", "H2-BERT+TextCNN", "H3-SoftVoting", "H4-FeatureFusion"],
-            "Type":         ["Individual", "Individual", "Individual", "Hybrid", "Hybrid", "Hybrid", "Hybrid"],
-            "Clean F1":     [0.9913, 0.9845, 0.9922, "TBD", "TBD", "TBD", "TBD"],
-            "QuillBot ASR": ["13.4%", "12.2%", "19.0%", "TBD", "TBD", "TBD", "TBD"],
-            "ChatGPT ASR":  ["1.6%", "3.2%", "6.8%", "TBD", "TBD", "TBD", "TBD"],
-        }
-        st.dataframe(pd.DataFrame(placeholder_data), use_container_width=True, hide_index=True)
+        st.warning("Hybrid results CSV not found. Run Notebooks 14 (Colab) and 15 (Local) first.")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# FEATURE 10 — MODEL PERFORMANCE COMPARISON (shown in all modes)
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Footer: full results table (always shown) ─────────────────────────────────
 st.markdown("---")
-with st.expander("📊 Full Model Performance Results — Dissertation Summary Table"):
-    st.markdown("""
-    <div class="key-finding">
-    📌 <strong>Key finding:</strong> RoBERTa achieves 99.95% recall on clean text
-    but drops to <strong>86.6%</strong> under QuillBot attack (ASR = 13.4%).
-    All transformer models are robust against Pegasus (98.8% recall). ChatGPT rewrites are
-    largely ineffective against transformer models (RoBERTa maintains 98.4% recall).
-    All models degrade significantly on the M4 cross-dataset test.
-    </div>
-    """, unsafe_allow_html=True)
+with st.expander("📊 Full Dissertation Results — All Conditions"):
+    FULL_RESULTS = pd.DataFrame([
+        ("RoBERTa-base","Clean HC3",0.9995,0.9913,0.9942,None),
+        ("BERT-base","Clean HC3",0.9997,0.9845,0.9895,None),
+        ("DistilBERT","Clean HC3",0.9995,0.9922,0.9948,None),
+        ("Hello-SimpleAI","Clean HC3",0.9977,0.9929,0.9953,None),
+        ("Log. Regression","Clean HC3",0.9364,0.9524,0.9689,None),
+        ("RoBERTa-base","Pegasus Attack",0.9880,None,None,0.012),
+        ("BERT-base","Pegasus Attack",0.9820,None,None,0.018),
+        ("DistilBERT","Pegasus Attack",0.9480,None,None,0.052),
+        ("Hello-SimpleAI","Pegasus Attack",0.9960,None,None,0.004),
+        ("Log. Regression","Pegasus Attack",0.7100,None,None,0.290),
+        ("RoBERTa-base","QuillBot Attack",0.8660,None,None,0.134),
+        ("BERT-base","QuillBot Attack",0.8780,None,None,0.122),
+        ("DistilBERT","QuillBot Attack",0.8100,None,None,0.190),
+        ("Hello-SimpleAI","QuillBot Attack",0.8600,None,None,0.140),
+        ("Log. Regression","QuillBot Attack",0.7320,None,None,0.268),
+        ("RoBERTa-base","ChatGPT Rewrite",0.9840,None,None,0.016),
+        ("BERT-base","ChatGPT Rewrite",0.9680,None,None,0.032),
+        ("DistilBERT","ChatGPT Rewrite",0.9320,None,None,0.068),
+        ("Hello-SimpleAI","ChatGPT Rewrite",0.9720,None,None,0.028),
+        ("Log. Regression","ChatGPT Rewrite",0.6060,None,None,0.394),
+        ("RoBERTa-base","M4 Cross-Dataset",0.6510,0.7389,0.7700,None),
+        ("BERT-base","M4 Cross-Dataset",0.4430,0.5999,0.7045,None),
+        ("DistilBERT","M4 Cross-Dataset",0.2790,0.4316,0.6325,None),
+        ("Hello-SimpleAI","M4 Cross-Dataset",0.3880,0.5442,0.6750,None),
+        ("Log. Regression","M4 Cross-Dataset",0.2260,0.3356,0.5525,None),
+    ], columns=["Model","Condition","Recall","F1","Accuracy","Attack_Success_Rate"])
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    for condition in ["Clean HC3","Pegasus Attack","QuillBot Attack","ChatGPT Rewrite","M4 Cross-Dataset"]:
+        subset = FULL_RESULTS[FULL_RESULTS["Condition"]==condition].copy()
+        subset = subset[["Model","Recall","F1","Accuracy","Attack_Success_Rate"]].fillna("—")
 
-    for condition in ["Clean HC3", "Pegasus Attack", "QuillBot Attack",
-                      "ChatGPT Rewrite", "M4 Cross-Dataset"]:
-        subset = FULL_RESULTS[FULL_RESULTS["Condition"] == condition].copy()
-        display_cols = ["Model", "Recall", "F1", "Accuracy", "Attack_Success_Rate"]
-        subset = subset[display_cols].rename(columns={
-            "Attack_Success_Rate": "Attack Success Rate",
-        })
-        subset = subset.fillna("—")
-
-        def style_recall(val):
-            """Colour recall cells: green=high, red=low."""
+        def colour_recall(val):
             try:
                 v = float(val)
-                if v >= 0.80:
-                    return "background-color: #d4edda"
-                elif v <= 0.30:
-                    return "background-color: #f8d7da"
-                return "background-color: #fff3cd"
-            except Exception:
-                return ""
+                return "background-color:#d4edda" if v >= 0.80 else "background-color:#f8d7da" if v <= 0.30 else "background-color:#fff3cd"
+            except: return ""
 
         st.markdown(f"**{condition}**")
-        styled = subset.style.applymap(style_recall, subset=["Recall"])
-        st.dataframe(styled, use_container_width=True, hide_index=True)
-        st.markdown("")
+        st.dataframe(subset.style.applymap(colour_recall, subset=["Recall"]),
+                     use_container_width=True, hide_index=True)
 
-
-# ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.markdown(
-    "<center><small>MSc AI Dissertation · University of the West of Scotland · "
-    "Abdul Hannaan Mohammed B00409227 · Supervisor: Dr Tahir Mahmood · 2026</small></center>",
-    unsafe_allow_html=True
-)
+st.caption("MSc AI Detection Platform · Abdul Hannaan Mohammed · B00409227 · UWS · 2025/26 · Dr Tahir Mahmood")
