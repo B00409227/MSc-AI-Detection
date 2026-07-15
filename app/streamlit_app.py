@@ -6,7 +6,7 @@ Supervisor: Dr Tahir Mahmood
 Run with: streamlit run app/streamlit_app.py
 """
 
-import os, sys, io, time, re
+import os, sys, io, time, re, random
 import torch
 import numpy as np
 import pandas as pd
@@ -373,7 +373,7 @@ if not _RUNNING_LOCAL:
     st.info(
         "**Cloud mode:** Transformer models download from HuggingFace Hub on first use "
         "(RoBERTa ≈500 MB, BERT ≈430 MB, DistilBERT ≈270 MB). Expect a 1–2 min wait per model; "
-        "all 5 models and all modes are fully functional once loaded.",
+        "all 7 live models and all modes are fully functional once loaded.",
         icon="ℹ️"
     )
 
@@ -738,11 +738,17 @@ if mode == "🔍 Single Analysis":
     input_text = ""
 
     with tab_paste:
-        gen_col, _ = st.columns([1, 3])
+        gen_col, gen_col2, _ = st.columns([1, 1, 2])
         with gen_col:
-            if st.button("🤖 Populate with AI text", key="gen_single_ai"):
-                with st.spinner("Generating with DistilGPT-2…"):
-                    st.session_state["paste_input"] = generate_ai_text("academic writing and research")
+            if st.button("🤖 Populate with ChatGPT sample", key="gen_single_ai",
+                         help="Loads a real ChatGPT text — reliably detected as AI. "
+                              "Use Generate & Detect mode to experiment with DistilGPT-2 generation."):
+                st.session_state["paste_input"] = random.choice(list(SAMPLE_AI_TEXTS.values()))
+                st.rerun()
+        with gen_col2:
+            if st.button("🧑 Populate with human sample", key="gen_single_human",
+                         help="Loads a real human-written text — should be classified as Human."):
+                st.session_state["paste_input"] = random.choice(list(SAMPLE_HUMAN_TEXTS.values()))
                 st.rerun()
         input_text_paste = st.text_area(
             "Paste your text below",
@@ -958,7 +964,7 @@ elif mode == "👥 Human vs AI Lab":
     st.markdown("""
     <div class="key-finding">
     📌 Paste a <strong>human-written</strong> text on the left and an <strong>AI-generated</strong> text
-    on the right — or load a sample pair — then analyse both with all 5 models simultaneously.
+    on the right — or load a sample pair — then analyse both with all 7 live models simultaneously.
     </div>
     """, unsafe_allow_html=True)
 
@@ -994,6 +1000,10 @@ elif mode == "👥 Human vs AI Lab":
             key="lab_human",
             label_visibility="collapsed"
         )
+        if st.button("🧑 Populate with human sample", key="gen_lab_human",
+                     help="Loads a real human-written text."):
+            st.session_state["lab_human"] = random.choice(list(SAMPLE_HUMAN_TEXTS.values()))
+            st.rerun()
         if human_text:
             st.caption(f"{len(human_text):,} chars · {len(human_text.split()):,} words")
 
@@ -1009,9 +1019,9 @@ elif mode == "👥 Human vs AI Lab":
         if ai_text:
             st.caption(f"{len(ai_text):,} chars · {len(ai_text.split()):,} words")
 
-        if st.button("🤖 Generate AI text for this field", key="gen_lab_ai"):
-            with st.spinner("Generating with DistilGPT-2…"):
-                st.session_state["lab_ai"] = generate_ai_text("academic writing and research")
+        if st.button("🤖 Populate with ChatGPT sample", key="gen_lab_ai",
+                     help="Loads a real ChatGPT text that will be reliably detected as AI."):
+            st.session_state["lab_ai"] = random.choice(list(SAMPLE_AI_TEXTS.values()))
             st.rerun()
 
     run_all = st.toggle("Run all 7 models simultaneously (including H3 & H4 hybrids)", value=True)
@@ -1303,10 +1313,13 @@ elif mode == "🤖 Generate & Detect":
 
         st.markdown("""
         <div class="key-finding">
-        💡 <strong>Dissertation context:</strong> These models were trained on ChatGPT output (HC3 dataset).
-        DistilGPT-2 uses a different generation strategy but shares statistical regularities with other LLMs —
-        high token repetition probability, formulaic sentence structures, and lower lexical diversity.
-        This is why the detectors generalise beyond their training distribution.
+        💡 <strong>Dissertation context — cross-generator generalisation:</strong>
+        These models were trained exclusively on <strong>ChatGPT (GPT-3.5 turbo)</strong> output from the HC3 dataset.
+        DistilGPT-2 is an 82 M-parameter model from 2019 that produces higher-perplexity, less structured text
+        with different statistical patterns — it does <em>not</em> use the formal, low-perplexity style that the
+        detectors associate with AI. If DistilGPT-2 text is classified as Human, this is expected and is itself
+        a dissertation finding: detectors are <strong>generator-specific</strong>, not universal.
+        The M4 cross-dataset evaluation (F1 range 0.43–0.74) confirms this generalisation gap.
         </div>
         """, unsafe_allow_html=True)
 
@@ -1327,9 +1340,9 @@ elif mode == "⚔️ Attack Simulation":
 
     atk_btn_col, _ = st.columns([1, 3])
     with atk_btn_col:
-        if st.button("🤖 Populate with AI text", key="gen_attack_ai"):
-            with st.spinner("Generating with DistilGPT-2…"):
-                st.session_state["attack_input"] = generate_ai_text("artificial intelligence and machine learning")
+        if st.button("🤖 Populate with ChatGPT sample", key="gen_attack_ai",
+                     help="Loads a real ChatGPT text to demonstrate the paraphrase attack."):
+            st.session_state["attack_input"] = random.choice(list(SAMPLE_AI_TEXTS.values()))
             st.rerun()
     input_text = st.text_area(
         "Paste AI-generated text to attack",
@@ -1600,9 +1613,9 @@ elif mode == "🔬 Hybrid Research":
 
     hyb_btn_col, _ = st.columns([1, 3])
     with hyb_btn_col:
-        if st.button("🤖 Populate with AI text", key="gen_hybrid_ai"):
-            with st.spinner("Generating with DistilGPT-2…"):
-                st.session_state["hybrid_input"] = generate_ai_text("artificial intelligence research")
+        if st.button("🤖 Populate with ChatGPT sample", key="gen_hybrid_ai",
+                     help="Loads a real ChatGPT text to compare H3 vs H4 vs RoBERTa detection."):
+            st.session_state["hybrid_input"] = random.choice(list(SAMPLE_AI_TEXTS.values()))
             st.rerun()
     hybrid_input = st.text_area(
         "Paste text to test with hybrid models",
