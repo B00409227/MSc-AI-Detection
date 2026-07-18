@@ -133,7 +133,7 @@ MODEL_CARDS = {
         "ref": "Sokolova & Lapalme (2009) doi:10.1016/j.ipm.2009.03.002",
     },
     "H1-RoBERTa+BiLSTM": {
-        "label": "H1: RoBERTa + BiLSTM", "category": "Hybrid", "badge": "#E65100",
+        "label": "H1: RoBERTa + BiLSTM", "category": "Hybrid", "badge": "#B71C1C",
         "arch":  "RoBERTa-base (FROZEN) → BiLSTM (256 hidden, 2 layers, bidirectional) → classifier",
         "base":  "Feature-based transfer learning (Peters et al., 2018 ELMo approach)",
         "train": "Only LSTM + classifier trained (2.9% of params) · Google Colab T4 · 5 epochs · lr=1e-3",
@@ -141,12 +141,13 @@ MODEL_CARDS = {
         "clean_f1": 0.9910, "clean_acc": 0.9940, "clean_recall": 0.9990, "clean_prec": 0.9830,
         "peg_asr": 1.4, "qui_asr": 4.8, "cgpt_asr": 2.2, "m4_f1": 0.7127,
         "strength": "⭐ BEST ROBUSTNESS: QuillBot ASR=4.8% — 64% lower than plain RoBERTa (13.4%). BiLSTM captures sequential word-order dependencies that vocabulary substitution cannot easily disrupt. High M4 F1=0.713.",
-        "weakness": "Slightly lower clean F1 (0.991) than full fine-tuning. Requires Colab for training. Adds inference overhead from LSTM layer.",
+        "weakness": "Weights trained on Google Colab — not available for live inference in this app. See 🔬 Hybrid Research mode for full experimental results.",
         "why": "Freezing RoBERTa and adding BiLSTM forces the classifier to rely on sequential patterns rather than learned token probabilities, which are disrupted by paraphrase attacks. Inspired by Peters et al. (2018) ELMo feature extraction.",
         "ref": "Schuster & Paliwal (1997) doi:10.1109/78.650093 · Peters et al. (2018)",
+        "live_inference": False,
     },
     "H2-BERT+TextCNN": {
-        "label": "H2: BERT + TextCNN", "category": "Hybrid", "badge": "#E65100",
+        "label": "H2: BERT + TextCNN", "category": "Hybrid", "badge": "#B71C1C",
         "arch":  "BERT-base (FROZEN) → Parallel Conv1d (kernel=2,3,4 · 128 filters each) → MaxPool → classifier",
         "base":  "TextCNN (Kim, 2014) adapted for transformer feature extraction",
         "train": "Only CNN + classifier trained (0.85% of params) · Google Colab T4 · 5 epochs · lr=1e-3",
@@ -154,9 +155,10 @@ MODEL_CARDS = {
         "clean_f1": 0.9695, "clean_acc": 0.9763, "clean_recall": 0.9940, "clean_prec": 0.9450,
         "peg_asr": 4.2, "qui_asr": 9.6, "cgpt_asr": 3.8, "m4_f1": 0.5923,
         "strength": "QuillBot ASR=9.6% — 28% lower than BERT (12.2%). CNN filters detect characteristic AI n-gram phrases that persist through paraphrase. Extremely parameter-efficient (0.85% trainable).",
-        "weakness": "Lower clean F1 (0.9695) — precision drop (0.945) suggests more false positives. Fixed kernel sizes may miss longer-range AI patterns.",
+        "weakness": "Weights trained on Google Colab — not available for live inference in this app. See 🔬 Hybrid Research mode for full experimental results.",
         "why": "CNN filters on BERT embeddings capture local n-gram patterns without the model memorising full-text statistics that attacks exploit. Minimal additional training makes it highly efficient.",
         "ref": "Kim (2014) doi:10.3115/v1/D14-1181",
+        "live_inference": False,
     },
     "H3-SoftVoting": {
         "label": "H3: Soft Voting Ensemble", "category": "Hybrid", "badge": "#1A237E",
@@ -183,35 +185,6 @@ MODEL_CARDS = {
         "weakness": "QuillBot ASR=16.0% — WORSE than plain RoBERTa (13.4%). The TF-IDF component is disrupted by QuillBot's vocabulary substitution, which degrades the fused feature signal.",
         "why": "The fusion experiment reveals that TF-IDF features are a liability under vocabulary attacks. This motivates future work combining sequential (H1-BiLSTM) with stylometric signals instead of bag-of-words features.",
         "ref": "Verma et al. (2023) Ghostbuster arXiv:2305.15047",
-    },
-    # H1 and H2 are research-only (weights trained on Colab, not available for live inference)
-    "H1-RoBERTa+BiLSTM": {
-        "label": "H1: RoBERTa + BiLSTM (Research Only)", "category": "Hybrid", "badge": "#B71C1C",
-        "arch":  "RoBERTa-base (FROZEN) → BiLSTM(256 hidden, 2 layers, bidir) → classifier",
-        "base":  "ELMo-style feature extraction (Peters et al., 2018)",
-        "train": "BiLSTM + classifier only (2.9% params) · Colab T4 · 5 epochs · lr=1e-3",
-        "device": "Google Colab T4 (15 GB VRAM)", "trainable": "3.6 M / 125 M (2.9%)",
-        "clean_f1": 0.9910, "clean_acc": 0.9940, "clean_recall": 0.9990, "clean_prec": 0.9830,
-        "peg_asr": 1.4, "qui_asr": 4.8, "cgpt_asr": 2.2, "m4_f1": 0.7127,
-        "strength": "⭐ BEST ROBUSTNESS: QuillBot ASR=4.8% — 64% lower than plain RoBERTa. BiLSTM captures sequential patterns that vocabulary substitution cannot disrupt.",
-        "weakness": "Weights only available on Colab — not available for live inference in this app. Inference results shown from dissertation experiments.",
-        "why": "Freezing RoBERTa and adding BiLSTM forces reliance on sequential word-order signals rather than token probability distributions disrupted by paraphrase.",
-        "ref": "Schuster & Paliwal (1997) doi:10.1109/78.650093",
-        "live_inference": False,
-    },
-    "H2-BERT+TextCNN": {
-        "label": "H2: BERT + TextCNN (Research Only)", "category": "Hybrid", "badge": "#B71C1C",
-        "arch":  "BERT-base (FROZEN) → Parallel Conv1d (kernel 2,3,4 · 128 filters) → MaxPool → classifier",
-        "base":  "TextCNN (Kim, 2014) on transformer embeddings",
-        "train": "CNN + classifier only (0.85% params) · Colab T4 · 5 epochs · lr=1e-3",
-        "device": "Google Colab T4 (15 GB VRAM)", "trainable": "936 K / 110 M (0.85%)",
-        "clean_f1": 0.9695, "clean_acc": 0.9763, "clean_recall": 0.9940, "clean_prec": 0.9450,
-        "peg_asr": 4.2, "qui_asr": 9.6, "cgpt_asr": 3.8, "m4_f1": 0.5923,
-        "strength": "QuillBot ASR=9.6% — 28% improvement over BERT. CNN captures AI n-gram patterns. Only 0.85% trainable params.",
-        "weakness": "Weights only available on Colab — not available for live inference. Inference results shown from dissertation experiments.",
-        "why": "CNN filters on frozen BERT embeddings capture local AI phrase patterns without relying on the token-level statistics that paraphrase attacks exploit.",
-        "ref": "Kim (2014) doi:10.3115/v1/D14-1181",
-        "live_inference": False,
     },
 }
 
@@ -670,38 +643,53 @@ AI_PHRASES = [
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## ⚙️ Settings")
-
+    st.markdown("### Navigation")
     mode = st.radio(
-        "Navigation",
+        "Select mode",
         ["🔍 Single Analysis", "👥 Human vs AI Lab", "🤖 Generate & Detect",
          "⚔️ Attack Simulation", "📚 Model Explorer", "🔬 Hybrid Research"],
         label_visibility="collapsed"
     )
 
+    # Brief mode descriptions to help demo navigation
+    _mode_help = {
+        "🔍 Single Analysis":   "Paste any text → instant verdict from chosen model",
+        "👥 Human vs AI Lab":   "Compare human vs AI text side-by-side across all 7 models",
+        "🤖 Generate & Detect": "Generate AI text with DistilGPT-2, then detect it",
+        "⚔️ Attack Simulation": "Live paraphrase attack demo (T5_Paraphrase_Paws)",
+        "📚 Model Explorer":    "Deep-dive architecture cards for all 9 models",
+        "🔬 Hybrid Research":   "Novel hybrid architectures + live H3/H4 inference",
+    }
+    st.caption(_mode_help.get(mode, ""))
+
     st.markdown("---")
     selected_model = st.selectbox(
-        "Active Model (for analysis)",
+        "Active model",
         list(MODEL_OPTIONS.keys()),
-        help="Used in Single Analysis, Human vs AI Lab, Attack Simulation"
+        help="Used in Single Analysis, Attack Simulation, and Human vs AI Lab (single-model mode)"
     )
 
     card = MODEL_CARDS[selected_model]
     badge_cls = "badge-hyb" if card["category"] == "Hybrid" else "badge-ind"
+    _is_research_only = card.get("live_inference", True) is False
     st.markdown(
         f'<span class="{badge_cls}">{card["category"]}</span> '
-        f'<span style="font-size:0.88rem;font-weight:600">&nbsp;{card["label"]}</span>',
+        f'<span style="font-size:0.88rem;font-weight:600">&nbsp;{card["label"]}</span>'
+        + (' <span style="font-size:0.75rem;color:#B71C1C;font-weight:600">(Colab-only)</span>' if _is_research_only else ''),
         unsafe_allow_html=True
     )
-    st.markdown(
-        f'<div class="model-info-box" style="margin-top:8px">'
-        f'<b>Clean F1</b> {card["clean_f1"]:.4f} &nbsp;·&nbsp; '
-        f'<b>Acc</b> {card["clean_acc"]:.4f}<br>'
-        f'<b>Pegasus ASR</b> {card["peg_asr"]}% &nbsp;·&nbsp; '
-        f'<b>QuillBot ASR</b> {card["qui_asr"]}%'
-        f'</div>',
-        unsafe_allow_html=True
-    )
+    if _is_research_only:
+        st.caption("⚠️ Research-only: weights not available for live inference. Results come from dissertation experiments.")
+    else:
+        st.markdown(
+            f'<div class="model-info-box" style="margin-top:8px">'
+            f'<b>Clean F1</b> {card["clean_f1"]:.4f} &nbsp;·&nbsp; '
+            f'<b>Acc</b> {card["clean_acc"]:.4f}<br>'
+            f'<b>Pegasus ASR</b> {card["peg_asr"]}% &nbsp;·&nbsp; '
+            f'<b>QuillBot ASR</b> {card["qui_asr"]}%'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
     st.markdown("---")
     st.markdown("**Colour guide**")
@@ -1204,8 +1192,10 @@ elif mode == "🤖 Generate & Detect":
             with st.spinner("Generating with DistilGPT-2… (first run downloads 350 MB)"):
                 try:
                     st.session_state.generated_text = generate_ai_text(topic, gen_len)
+                    st.session_state["gen_display"] = st.session_state.generated_text
                 except Exception as e:
                     st.session_state.generated_text = ""
+                    st.session_state["gen_display"] = ""
                     st.error(f"Generation failed: {e}")
 
         generated_display = st.text_area(
@@ -1281,7 +1271,7 @@ elif mode == "🤖 Generate & Detect":
             return [f"background-color: {colour}"] * len(row)
 
         st.dataframe(result_df.style.apply(highlight_correct, axis=1),
-                     use_container_width=True, hide_index=True)
+                     hide_index=True)
 
         # Bar chart
         fig, ax = plt.subplots(figsize=(12, 5))
@@ -1329,6 +1319,14 @@ elif mode == "🤖 Generate & Detect":
 # ══════════════════════════════════════════════════════════════════════════════
 elif mode == "⚔️ Attack Simulation":
     st.subheader("⚔️ Attack Simulation — Adversarial Paraphrase")
+
+    if MODEL_CARDS[selected_model].get("live_inference", True) is False:
+        st.warning(
+            f"**{selected_model}** is a Colab-only research model with no live inference weights. "
+            "Please switch to a live model (e.g. RoBERTa-base) using the sidebar dropdown."
+        )
+        st.stop()
+
     st.markdown("""
     <div class="key-finding">
     📌 <strong>Dissertation finding:</strong> The QuillBot-style attack (T5_Paraphrase_Paws,
@@ -1361,7 +1359,7 @@ elif mode == "⚔️ Attack Simulation":
             {"Model": "LR+TF-IDF",    "Pegasus ASR": "29.0%", "QuillBot ASR": "26.8%", "ChatGPT ASR": "39.4%"},
             {"Model": "H1-BiLSTM",    "Pegasus ASR": "1.4%",  "QuillBot ASR": "4.8%",  "ChatGPT ASR": "2.2%"},
         ])
-        st.dataframe(asr_df, use_container_width=True, hide_index=True)
+        st.dataframe(asr_df, hide_index=True)
 
     if st.button("⚔️ Run Paraphrase Attack", type="primary", disabled=not bool(input_text.strip())):
 
@@ -1702,7 +1700,7 @@ elif mode == "🔬 Hybrid Research":
 
         st.markdown("#### Master Results Table (9 Models)")
         st.dataframe(summary_table.style.apply(highlight_hybrid, axis=1),
-                     use_container_width=True, hide_index=True)
+                     hide_index=True)
 
         # Load saved figures if available
         fig_dir = os.path.join(PROJECT_ROOT, "results", "figures")
@@ -1715,7 +1713,7 @@ elif mode == "🔬 Hybrid Research":
             fpath = os.path.join(fig_dir, fname)
             if os.path.exists(fpath):
                 st.markdown(f"#### {caption}")
-                st.image(fpath, use_container_width=True)
+                st.image(fpath)
 
         # McNemar's test
         mcnemar_path = os.path.join(PROJECT_ROOT, "results", "metrics", "mcnemar_test_results.csv")
@@ -1723,7 +1721,7 @@ elif mode == "🔬 Hybrid Research":
             st.markdown("#### Statistical Significance — McNemar's Test")
             st.caption("Dietterich (1998) doi:10.1162/089976698300017197 — tests whether classification differences are statistically significant (χ² test on disagreement cells; p<0.05 = significant).")
             mcn_df = pd.read_csv(mcnemar_path)
-            st.dataframe(mcn_df, use_container_width=True, hide_index=True)
+            st.dataframe(mcn_df, hide_index=True)
             st.markdown("""
             **Interpretation:**
             - **RoBERTa vs H3**: p=0.899 — NOT significant. Soft voting adds no statistically meaningful benefit.
@@ -1776,19 +1774,23 @@ with st.expander("📊 Full Dissertation Results — All Conditions"):
         ("Log. Regression","M4 Cross-Dataset",0.2260,0.3356,0.5525,None),
     ], columns=["Model","Condition","Recall","F1","Accuracy","Attack_Success_Rate"])
 
+    def colour_recall(val):
+        try:
+            v = float(val)
+            if v >= 0.80:
+                return "background-color:#d4edda"
+            elif v <= 0.30:
+                return "background-color:#f8d7da"
+            return "background-color:#fff3cd"
+        except:
+            return ""
+
     for condition in ["Clean HC3","Pegasus Attack","QuillBot Attack","ChatGPT Rewrite","M4 Cross-Dataset"]:
         subset = FULL_RESULTS[FULL_RESULTS["Condition"]==condition].copy()
         subset = subset[["Model","Recall","F1","Accuracy","Attack_Success_Rate"]].fillna("—")
-
-        def colour_recall(val):
-            try:
-                v = float(val)
-                return "background-color:#d4edda" if v >= 0.80 else "background-color:#f8d7da" if v <= 0.30 else "background-color:#fff3cd"
-            except: return ""
-
         st.markdown(f"**{condition}**")
-        st.dataframe(subset.style.applymap(colour_recall, subset=["Recall"]),
-                     use_container_width=True, hide_index=True)
+        st.dataframe(subset.style.map(colour_recall, subset=["Recall"]),
+                     hide_index=True)
 
 st.markdown("---")
 st.caption("MSc AI Detection Platform · Abdul Hannaan Mohammed · B00409227 · UWS · 2025/26 · Dr Tahir Mahmood")
