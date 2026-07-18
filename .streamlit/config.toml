@@ -2,6 +2,10 @@
 maxUploadSize = 50
 headless = true
 
+[client]
+# Always show full error tracebacks in the UI (even in production/cloud)
+showErrorDetails = true
+
 [theme]
 primaryColor = "#0066cc"
 backgroundColor = "#ffffff"

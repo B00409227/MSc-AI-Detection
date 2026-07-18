@@ -6,7 +6,7 @@ Supervisor: Dr Tahir Mahmood
 Run with: streamlit run app/streamlit_app.py
 """
 
-import os, sys, io, time, re, random
+import os, sys, io, time, re, random, traceback as _tb
 import torch
 import numpy as np
 import pandas as pd
@@ -17,6 +17,34 @@ from datetime import datetime
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
+
+# ── Error logging (visible in production) ─────────────────────────────────────
+def _log_error(context: str, exc: Exception | str, *, show_inline: bool = True) -> None:
+    """Record an error to session_state and optionally display it on screen.
+
+    showErrorDetails=true in config.toml handles uncaught exceptions automatically.
+    This helper surfaces errors that are *caught* but would otherwise be silently
+    swallowed, so they still appear in the UI and in the sidebar error log.
+    """
+    tb_str = _tb.format_exc() if isinstance(exc, Exception) else str(exc)
+    if "NoneType: None" in tb_str:
+        tb_str = str(exc)  # no real traceback available
+    entry = f"[{datetime.now():%H:%M:%S}]  {context}\n{tb_str}"
+    if "_error_log" not in st.session_state:
+        st.session_state._error_log = []
+    if not st.session_state._error_log or st.session_state._error_log[-1] != entry:
+        st.session_state._error_log.append(entry)
+    if show_inline:
+        st.error(f"**Error — {context}**")
+        if isinstance(exc, Exception):
+            st.exception(exc)
+        else:
+            st.code(str(exc), language="python")
+        st.info(
+            "Copy the error above and paste it into the chat so it can be fixed. "
+            "You can also see all session errors in the **🐛 Error log** at the bottom "
+            "of the sidebar."
+        )
 
 st.set_page_config(
     page_title="AI Text Detection — UWS MSc",
@@ -715,6 +743,20 @@ with st.sidebar:
         """)
     st.markdown('[📂 GitHub](https://github.com/B00409227/MSc-AI-Detection)', unsafe_allow_html=True)
 
+    # ── Error log (visible when errors occur in the session) ──────────────────
+    _errs = st.session_state.get("_error_log", [])
+    if _errs:
+        st.markdown("---")
+        with st.expander(f"🐛 Error log ({len(_errs)} error{'s' if len(_errs)>1 else ''})", expanded=True):
+            st.markdown(
+                "Copy any entry below and paste it into the chat to get it fixed."
+            )
+            for _entry in _errs[-10:]:
+                st.code(_entry, language="python")
+            if st.button("🗑️ Clear log", key="_sidebar_clear_errs"):
+                st.session_state._error_log = []
+                st.rerun()
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MODE 1 — SINGLE ANALYSIS
@@ -792,8 +834,8 @@ if mode == "🔍 Single Analysis":
             )
             st.stop()
         if error or ai_prob is None:
-            st.warning(f"Model unavailable: {error}. Showing placeholder.")
-            ai_prob, label = 0.72, 1
+            _log_error(f"Model inference — {selected_model}", error or "returned None")
+            st.stop()
 
         ai_pct     = ai_prob * 100
         confidence = max(ai_pct, 100 - ai_pct)
@@ -1368,8 +1410,10 @@ elif mode == "⚔️ Attack Simulation":
         with col1:
             st.markdown("### 📄 BEFORE Attack")
             with st.spinner("Classifying original…"):
-                label_o, prob_o, _ = predict_text(input_text, selected_model)
-                if prob_o is None: prob_o = 0.92
+                label_o, prob_o, _oerr = predict_text(input_text, selected_model)
+                if prob_o is None:
+                    _log_error(f"Before-attack inference — {selected_model}", _oerr or "returned None")
+                    prob_o, label_o = 0.5, 0
             st.markdown(verdict_box(label_o or 1, prob_o), unsafe_allow_html=True)
             st.markdown(traffic_light_html(prob_o * 100), unsafe_allow_html=True)
             c1, c2 = st.columns(2)
@@ -1391,10 +1435,14 @@ elif mode == "⚔️ Attack Simulation":
                     rewritten = ptok.decode(out[0], skip_special_tokens=True)
                     para_err  = None
                 except Exception as e:
-                    rewritten = input_text; para_err = str(e)
+                    rewritten = input_text
+                    para_err = str(e)
+                    _log_error("Paraphraser (T5_Paraphrase_Paws)", e)
 
-            label_r, prob_r, _ = predict_text(rewritten, selected_model)
-            if prob_r is None: prob_r = 0.08
+            label_r, prob_r, _rerr = predict_text(rewritten, selected_model)
+            if prob_r is None:
+                _log_error(f"Post-attack inference — {selected_model}", _rerr or "returned None")
+                prob_r, label_r = 0.5, 0
 
             st.markdown(verdict_box(label_r or 0, prob_r), unsafe_allow_html=True)
             st.markdown(traffic_light_html(prob_r * 100), unsafe_allow_html=True)
@@ -1789,8 +1837,12 @@ with st.expander("📊 Full Dissertation Results — All Conditions"):
         subset = FULL_RESULTS[FULL_RESULTS["Condition"]==condition].copy()
         subset = subset[["Model","Recall","F1","Accuracy","Attack_Success_Rate"]].fillna("—")
         st.markdown(f"**{condition}**")
-        st.dataframe(subset.style.map(colour_recall, subset=["Recall"]),
-                     hide_index=True)
+        try:
+            st.dataframe(subset.style.map(colour_recall, subset=["Recall"]),
+                         hide_index=True)
+        except Exception as _fe:
+            _log_error(f"Results table — {condition}", _fe)
+            st.dataframe(subset, hide_index=True)
 
 st.markdown("---")
 st.caption("MSc AI Detection Platform · Abdul Hannaan Mohammed · B00409227 · UWS · 2025/26 · Dr Tahir Mahmood")
