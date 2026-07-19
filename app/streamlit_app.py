@@ -1009,6 +1009,12 @@ elif mode == "👥 Human vs AI Lab":
         if sel != "— paste your own —":
             st.session_state["lab_ai"] = SAMPLE_AI_TEXTS[sel]
 
+    def _populate_lab_human():
+        st.session_state["lab_human"] = random.choice(list(SAMPLE_HUMAN_TEXTS.values()))
+
+    def _populate_lab_ai():
+        st.session_state["lab_ai"] = random.choice(list(SAMPLE_AI_TEXTS.values()))
+
     sample_col1, sample_col2, _ = st.columns([2, 2, 1])
     with sample_col1:
         st.selectbox("Load human text sample",
@@ -1030,10 +1036,8 @@ elif mode == "👥 Human vs AI Lab":
             key="lab_human",
             label_visibility="collapsed"
         )
-        if st.button("🧑 Populate with human sample", key="gen_lab_human",
-                     help="Loads a real human-written text."):
-            st.session_state["lab_human"] = random.choice(list(SAMPLE_HUMAN_TEXTS.values()))
-            st.rerun()
+        st.button("🧑 Populate with human sample", key="gen_lab_human",
+                  help="Loads a real human-written text.", on_click=_populate_lab_human)
         if human_text:
             st.caption(f"{len(human_text):,} chars · {len(human_text.split()):,} words")
 
@@ -1049,10 +1053,9 @@ elif mode == "👥 Human vs AI Lab":
         if ai_text:
             st.caption(f"{len(ai_text):,} chars · {len(ai_text.split()):,} words")
 
-        if st.button("🤖 Populate with ChatGPT sample", key="gen_lab_ai",
-                     help="Loads a real ChatGPT text that will be reliably detected as AI."):
-            st.session_state["lab_ai"] = random.choice(list(SAMPLE_AI_TEXTS.values()))
-            st.rerun()
+        st.button("🤖 Populate with ChatGPT sample", key="gen_lab_ai",
+                  help="Loads a real ChatGPT text that will be reliably detected as AI.",
+                  on_click=_populate_lab_ai)
 
     run_all = st.toggle("Run all 7 models simultaneously (including H3 & H4 hybrids)", value=True)
 
@@ -1240,9 +1243,10 @@ elif mode == "🤖 Generate & Detect":
                     st.session_state["gen_display"] = ""
                     st.error(f"Generation failed: {e}")
 
+        if "gen_display" not in st.session_state:
+            st.session_state["gen_display"] = ""
         generated_display = st.text_area(
             "Generated text (editable)",
-            value=st.session_state.generated_text,
             height=230,
             key="gen_display",
             placeholder="Click 'Generate AI Text' above to fill this box…"
