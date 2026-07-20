@@ -405,8 +405,12 @@ def load_logistic_regression(path: str):
 @st.cache_resource(show_spinner=False)
 def load_text_generator():
     """Load DistilGPT-2 for AI text generation (350 MB, CPU-friendly)."""
-    from transformers import pipeline as hf_pipeline
-    return hf_pipeline("text-generation", model="distilgpt2", device=-1)
+    try:
+        from transformers import pipeline as hf_pipeline
+        return hf_pipeline("text-generation", model="distilgpt2", device=-1), None
+    except Exception as e:
+        import traceback
+        return None, traceback.format_exc()
 
 
 @st.cache_resource(show_spinner=False)
@@ -572,7 +576,9 @@ def predict_all_models(text: str, include_hybrids: bool = True) -> dict:
 
 def generate_ai_text(prompt: str, max_new: int = 180) -> str:
     """Generate AI text using DistilGPT-2."""
-    gen = load_text_generator()
+    gen, load_err = load_text_generator()
+    if gen is None:
+        raise RuntimeError(f"DistilGPT-2 failed to load:\n{load_err}")
     full_prompt = (
         f"The following is a well-written, detailed answer to a question about {prompt}.\n\n"
         f"Answer: "
@@ -1241,7 +1247,7 @@ elif mode == "🤖 Generate & Detect":
                 except Exception as e:
                     st.session_state.generated_text = ""
                     st.session_state["gen_display"] = ""
-                    st.error(f"Generation failed: {e}")
+                    _log_error("Generate & Detect — DistilGPT-2", e)
 
         if "gen_display" not in st.session_state:
             st.session_state["gen_display"] = ""
