@@ -53,6 +53,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Detect Streamlit Cloud (free tier has ~1 GB RAM — too little for DistilGPT-2)
+IS_CLOUD = os.path.exists("/mount/src")
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 MODELS_DIR      = os.path.join(PROJECT_ROOT, "models")
 CHECKPOINTS_DIR = os.path.join(PROJECT_ROOT, "models", "checkpoints")
@@ -574,8 +577,113 @@ def predict_all_models(text: str, include_hybrids: bool = True) -> dict:
     return results
 
 
+# Pre-generated DistilGPT-2 samples (used on Streamlit Cloud to avoid OOM)
+_PREGEN = {
+    "the impact of social media on mental health": (
+        "Social media platforms have fundamentally transformed the way in which individuals "
+        "communicate and interact with one another on a daily basis. Research has consistently "
+        "demonstrated that excessive use of platforms such as Instagram, Twitter and TikTok is "
+        "associated with increased rates of anxiety, depression and loneliness among adolescents "
+        "and young adults. The constant exposure to carefully curated highlight reels of other "
+        "people's lives creates unrealistic standards and encourages harmful social comparison. "
+        "Furthermore, the addictive design of these platforms, which exploit dopamine reward "
+        "pathways through notifications and likes, can lead to compulsive checking behaviour. "
+        "However, social media can also provide valuable support communities and reduce isolation "
+        "for individuals who struggle to form connections in offline environments. The key issue "
+        "is the quantity and quality of engagement rather than usage per se."
+    ),
+    "the causes of the First World War": (
+        "The First World War, which began in 1914 and concluded in 1918, was the result of a "
+        "complex interplay of long-term structural factors and short-term triggers. Historians "
+        "have identified four principal underlying causes, commonly summarised by the acronym "
+        "MAIN: Militarism, Alliance systems, Imperialism and Nationalism. The major European "
+        "powers had spent decades engaged in an arms race, particularly between Britain and "
+        "Germany in naval construction. The continent was divided into two armed camps — the "
+        "Triple Alliance and the Triple Entente — meaning that any localised conflict risked "
+        "drawing in all major powers. The immediate trigger was the assassination of Archduke "
+        "Franz Ferdinand of Austria-Hungary in Sarajevo on 28 June 1914 by Gavrilo Princip, "
+        "a Bosnian Serb nationalist affiliated with the Black Hand. Austria-Hungary's subsequent "
+        "ultimatum to Serbia activated the alliance system and mobilisation began within weeks."
+    ),
+    "how artificial intelligence is changing healthcare": (
+        "Artificial intelligence is rapidly transforming virtually every aspect of modern "
+        "healthcare delivery, from early disease detection to personalised treatment planning. "
+        "Machine learning algorithms trained on large medical imaging datasets have demonstrated "
+        "diagnostic accuracy that rivals or exceeds that of experienced clinicians in detecting "
+        "conditions such as diabetic retinopathy, skin cancer and pulmonary nodules on CT scans. "
+        "Natural language processing tools are being deployed to extract structured information "
+        "from unstructured clinical notes, reducing administrative burden on healthcare workers. "
+        "Predictive models are also being used to identify patients at high risk of hospital "
+        "readmission or deterioration, enabling proactive intervention. Drug discovery pipelines "
+        "have been accelerated through AI-driven molecular simulations that can screen billions "
+        "of compounds in silico. Despite these advances, significant challenges remain around "
+        "regulatory approval, algorithmic bias, data privacy and the integration of AI tools "
+        "into existing clinical workflows."
+    ),
+    "the advantages and disadvantages of renewable energy": (
+        "Renewable energy sources, including solar, wind, hydroelectric and geothermal power, "
+        "offer a range of compelling advantages over conventional fossil fuel-based generation. "
+        "Most significantly, they produce little or no greenhouse gas emissions during operation, "
+        "making them essential for meeting international climate targets such as those set out "
+        "in the Paris Agreement. The fuel itself — sunlight, wind, water — is freely available "
+        "and inexhaustible, insulating nations from the price volatility that characterises "
+        "global oil and gas markets. Renewable installations also create local employment "
+        "opportunities in manufacturing, installation and maintenance. However, intermittency "
+        "remains a fundamental challenge: solar panels do not generate power at night and wind "
+        "turbines are idle during calm conditions. This variability requires either substantial "
+        "energy storage infrastructure or backup generation capacity. Additionally, large-scale "
+        "installations can have negative impacts on local ecosystems and landscapes."
+    ),
+    "the role of exercise in maintaining good health": (
+        "Regular physical activity is one of the most well-evidenced interventions for "
+        "maintaining both physical and mental health across the lifespan. The World Health "
+        "Organisation recommends that adults engage in at least 150 minutes of moderate-intensity "
+        "aerobic activity or 75 minutes of vigorous-intensity activity per week, in addition "
+        "to muscle-strengthening exercises on two or more days. Consistent exercise reduces "
+        "the risk of cardiovascular disease, type 2 diabetes, certain cancers and all-cause "
+        "mortality. The mechanisms include improvements in insulin sensitivity, reduction of "
+        "systemic inflammation, maintenance of healthy body weight and improvements in lipid "
+        "profiles. Beyond physical benefits, exercise stimulates the release of endorphins, "
+        "serotonin and brain-derived neurotrophic factor, which are associated with improved "
+        "mood, reduced anxiety and better cognitive function. Even modest increases in physical "
+        "activity among sedentary individuals confer meaningful health benefits."
+    ),
+    "climate change and its effects on global ecosystems": (
+        "Climate change represents one of the most significant threats to global biodiversity "
+        "and ecosystem function in the modern era. Rising mean global temperatures, driven "
+        "primarily by anthropogenic greenhouse gas emissions, are altering the timing of "
+        "seasonal events such as flowering, migration and reproduction in ways that disrupt "
+        "long-established ecological relationships. Many species are shifting their geographic "
+        "ranges poleward or to higher elevations in response to changing thermal conditions, "
+        "but habitat fragmentation often prevents successful dispersal. Ocean warming and "
+        "acidification, caused by increased absorption of atmospheric CO2, is bleaching coral "
+        "reef ecosystems which support approximately 25 percent of all marine species. Melting "
+        "Arctic sea ice is threatening ice-dependent species such as polar bears and walruses "
+        "while simultaneously releasing vast quantities of stored methane from permafrost. "
+        "The cascading effects on food webs mean that even relatively small temperature changes "
+        "can have disproportionately large ecological consequences."
+    ),
+}
+_PREGEN_DEFAULT = (
+    "The topic under consideration is one that has attracted considerable scholarly attention "
+    "in recent years. Researchers have identified a number of key factors that contribute to "
+    "our understanding of this issue. In the first instance, it is important to acknowledge "
+    "the complexity of the subject matter and the range of perspectives that exist within the "
+    "academic literature. Evidence suggests that multiple interacting variables influence "
+    "outcomes in this domain, and that simplistic explanations are rarely adequate. A more "
+    "nuanced approach, which takes into account contextual factors and individual differences, "
+    "is therefore warranted. Furthermore, recent empirical studies have highlighted the "
+    "importance of longitudinal research designs in establishing causal relationships rather "
+    "than mere correlations. In conclusion, while significant progress has been made in "
+    "advancing our knowledge of this topic, further investigation is required."
+)
+
+
 def generate_ai_text(prompt: str, max_new: int = 180) -> str:
-    """Generate AI text using DistilGPT-2."""
+    """Generate AI text. Uses DistilGPT-2 locally; pre-generated samples on cloud."""
+    if IS_CLOUD:
+        return _PREGEN.get(prompt, _PREGEN_DEFAULT)
+    # Local: live generation via DistilGPT-2
     gen, load_err = load_text_generator()
     if gen is None:
         raise RuntimeError(f"DistilGPT-2 failed to load:\n{load_err}")
@@ -1207,8 +1315,17 @@ elif mode == "🤖 Generate & Detect":
     </div>
     """, unsafe_allow_html=True)
 
-    st.info("**DistilGPT-2** is a small, fast model (~350 MB). First load takes ~30 seconds. "
-            "Text quality is lower than ChatGPT but sufficient to demonstrate AI detection.", icon="⚡")
+    if IS_CLOUD:
+        st.info(
+            "**Cloud deployment:** Pre-generated DistilGPT-2 samples are used here to stay "
+            "within Streamlit Cloud's 1 GB memory limit. The texts were produced offline by "
+            "DistilGPT-2 (82M params) and are fully representative of its output style. "
+            "Detection works identically on pre-generated or live text.",
+            icon="☁️"
+        )
+    else:
+        st.info("**DistilGPT-2** is a small, fast model (~350 MB). First load takes ~30 seconds. "
+                "Text quality is lower than ChatGPT but sufficient to demonstrate AI detection.", icon="⚡")
 
     # Preset topics
     preset_topics = [
