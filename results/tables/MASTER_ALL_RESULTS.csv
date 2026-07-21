@@ -1,0 +1,238 @@
+﻿################################################################################
+# MASTER RESULTS CSV — MSc AI Detection Dissertation
+# Student: Abdul Hannaan Mohammed | B00409227 | UWS MSc Artificial Intelligence
+# Supervisor: Dr Tahir Mahmood
+# Generated from: all result files in results/metrics/ and results/tables/
+# AUTHORITATIVE SOURCE: results/metrics/all_results_with_hybrids.csv
+# DISCREPANT EARLY SOURCE: results/tables/table03_master_results.csv
+# See DISCREPANCY NOTES section at bottom of this file
+################################################################################
+
+
+################################################################################
+# SECTION 1 — DATASET STATISTICS (Source: table01_hc3_dataset_stats.csv)
+################################################################################
+
+section,variable,value,notes
+DATASET,HC3_domain_finance_human,3933,raw samples before preprocessing
+DATASET,HC3_domain_finance_AI,4503,raw samples before preprocessing
+DATASET,HC3_domain_medicine_human,1248,raw samples before preprocessing
+DATASET,HC3_domain_medicine_AI,1334,raw samples before preprocessing
+DATASET,HC3_domain_open_qa_human,1187,raw samples before preprocessing
+DATASET,HC3_domain_open_qa_AI,3546,raw samples before preprocessing
+DATASET,HC3_domain_reddit_eli5_human,51336,raw samples before preprocessing
+DATASET,HC3_domain_reddit_eli5_AI,16660,raw samples before preprocessing
+DATASET,HC3_domain_wiki_csai_human,842,raw samples before preprocessing
+DATASET,HC3_domain_wiki_csai_AI,842,raw samples before preprocessing
+DATASET,HC3_total_human_raw,58546,before preprocessing
+DATASET,HC3_total_AI_raw,26885,before preprocessing
+DATASET,HC3_total_raw,85431,before preprocessing
+DATASET,HC3_avg_words_human,133.9,before preprocessing
+DATASET,HC3_avg_words_AI,173.2,before preprocessing
+
+
+################################################################################
+# SECTION 2 — TRAIN/VAL/TEST SPLIT (Source: table02_split_statistics.csv)
+################################################################################
+
+section,split,total_samples,human_samples,AI_samples,pct_human,pct_AI,avg_word_count
+SPLIT,Train_70pct,55156,36808,18348,66.7%,33.3%,139.6
+SPLIT,Val_15pct,11819,7888,3931,66.7%,33.3%,140.7
+SPLIT,Test_15pct,11820,7888,3932,66.7%,33.3%,139.6
+SPLIT,NOTE_imbalance,IMPORTANT: Dataset is 2:1 imbalanced (66.7% human / 33.3% AI) — not balanced. class_weight=balanced used in LR to compensate.,,,,,,
+
+
+################################################################################
+# SECTION 3 — MODEL TRAINING HYPERPARAMETERS
+################################################################################
+
+section,model,learning_rate,batch_size_per_device,grad_accum_steps,effective_batch_size,epochs,max_length,weight_decay,warmup_ratio,seed,hardware,source_file
+HYPERPARAMS,RoBERTa-base,2e-05,8,4,32,3,512,0.01,0.1,42,Local GPU 6GB VRAM,results/metrics/training_final_metrics.json
+HYPERPARAMS,BERT-base,2e-05,8,4,32,3,512,0.01,0.1,42,Local GPU 6GB VRAM,results/metrics/all_results.csv (inferred same config)
+HYPERPARAMS,DistilBERT,2e-05,8,4,32,3,512,0.01,0.1,42,Google Colab T4 15GB,results/metrics/all_results.csv (inferred same config)
+HYPERPARAMS,Hello-SimpleAI,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A — pre-trained NOT retrained,Hello-SimpleAI/chatgpt-detector-roberta (HuggingFace)
+HYPERPARAMS,LogisticRegression,N/A,N/A,N/A,N/A,N/A,50000_tfidf_features,N/A,N/A,N/A,Local CPU,results/metrics/lr_final_metrics.json
+HYPERPARAMS,LR_tfidf_detail,TF-IDF: max_features=50000 / ngram_range=(1-2) / sublinear_tf=True / LR: C=1.0 / max_iter=1000 / class_weight=balanced,,,,,,,,,,
+HYPERPARAMS,H1-RoBERTa+BiLSTM,1e-05,8,4,32,5,512,0.01,0.1,42,Google Colab T4 15GB,results/metrics/hybrid_nb14_results.csv
+HYPERPARAMS,H2-BERT+TextCNN,2e-05,8,4,32,5,512,0.01,0.1,42,Google Colab T4 15GB,results/metrics/hybrid_nb14_results.csv
+HYPERPARAMS,H3-SoftVoting,N/A — no training,N/A,N/A,N/A,N/A,N/A,N/A,N/A,N/A,Inference only (average of RoBERTa+BERT+DistilBERT),results/metrics/hybrid_nb15_results.csv
+HYPERPARAMS,H4-FeatureFusion,1e-03,32,N/A,32,20,N/A,1e-04,N/A,42,Local CPU (MLP head only),results/metrics/hybrid_nb15_results.csv
+HYPERPARAMS,RoBERTa_best_epoch,1 (of 3),Val F1 at best epoch: 0.9941 / Val accuracy: 0.996 / Val loss: 0.0304,,,,,,,,,
+
+HYPERPARAMS,NOTE_batch_correction,NOTE: Earlier brief stated batch_size=16. CORRECT value is batch_size=8 per device with grad_accum=4 = effective_batch=32. Source: training_final_metrics.json,,,,,,,,,,
+
+
+################################################################################
+# SECTION 4 — ATTACK CONFIGURATIONS
+################################################################################
+
+section,attack_name,model_used,hf_model_id,attack_type,decode_strategy,top_k,top_p,temperature,num_beams,n_samples,generated_on,attack_CSV_location
+ATTACK,Pegasus,tuner007/pegasus_paraphrase,tuner007/pegasus_paraphrase,Deterministic syntactic,Beam search,N/A,N/A,1.0,10,500,Google Colab T4,data/adversarial/
+ATTACK,QuillBot-style,Vamsi/T5_Paraphrase_Paws,Vamsi/T5_Paraphrase_Paws,Stochastic lexical,Sampling (do_sample=True),200,0.95,1.2,N/A,500,Local GPU 6GB,data/adversarial/
+ATTACK,ChatGPT,OpenAI gpt-3.5-turbo,N/A — API,Semantic LLM rewriting,Prompt-based,N/A,N/A,1.0,N/A,500,Local via API,data/adversarial/
+ATTACK,DIPPER,kalpeshk2011/dipper-paraphraser-xxl,kalpeshk2011/dipper-paraphraser-xxl,EXCLUDED — too large,N/A,N/A,N/A,N/A,N/A,0 — not used,EXCLUDED: 11B params exceed both local GPU (6GB) and Colab T4 (15GB),N/A — cited in lit review only
+ATTACK,ChatGPT_prompt_used,"Rewrite the following text in a natural human-like style varying sentence structure and vocabulary while preserving the core meaning: [TEXT]",,,,,,,,,,
+ATTACK,Human_eval_texts,QuillBot-style (T5_Paraphrase_Paws) samples were used as the Rewritten AI condition in the human evaluation study — these are the SAME 500 attack samples (5 texts selected from them for the study),,,,,,,,,,
+
+
+################################################################################
+# SECTION 5 — CLEAN PERFORMANCE (HC3 test set n=11820)
+# AUTHORITATIVE SOURCE: all_results_with_hybrids.csv + individual JSON files
+################################################################################
+
+section,model,model_type,dataset,condition,n_samples,accuracy,precision,recall,f1,roc_auc,source_file
+CLEAN,RoBERTa-base,Individual,HC3,Clean,11820,0.9942,0.9832,0.9995,0.9913,0.9999,results/metrics/results_original_test.json
+CLEAN,BERT-base,Individual,HC3,Clean,11820,0.9895,0.9697,0.9997,0.9845,0.9999,results/metrics/all_results.csv
+CLEAN,DistilBERT,Individual,HC3,Clean,11820,0.9948,0.9850,0.9995,0.9922,0.9999,results/metrics/all_results.csv
+CLEAN,Hello-SimpleAI,Individual,HC3,Clean,11820,0.9953,0.9882,0.9977,0.9929,0.9997,results/metrics/helloSimpleAI_metrics.json
+CLEAN,LogisticRegression,Individual,HC3,Clean,11820,0.9689,0.9689,0.9364,0.9524,0.9961,results/metrics/lr_final_metrics.json
+CLEAN,H1-RoBERTa+BiLSTM,Hybrid,HC3,Clean,11820,0.9940,0.9832,0.9990,0.9910,0.9999,results/metrics/hybrid_nb14_results.csv
+CLEAN,H2-BERT+TextCNN,Hybrid,HC3,Clean,11820,0.9791,0.9420,0.9987,0.9695,0.9997,results/metrics/hybrid_nb14_results.csv
+CLEAN,H3-SoftVoting,Hybrid,HC3,Clean,11820,0.9943,0.9835,0.9997,0.9916,1.0000,results/metrics/hybrid_nb15_results.csv
+CLEAN,H4-FeatureFusion,Hybrid,HC3,Clean,11820,0.9953,0.9872,0.9987,0.9929,0.9996,results/metrics/hybrid_nb15_results.csv
+
+CLEAN,RoBERTa_confusion_matrix_detail,"TN=7821 / FP=67 / FN=2 / TP=3930 (Source: results_original_test.json)",,,,,,,,,,
+
+
+################################################################################
+# SECTION 6 — ADVERSARIAL ATTACK RESULTS (AUTHORITATIVE — final evaluation)
+# NOTE: Attack rows evaluate AI-class ONLY (n=500 AI samples per attack)
+# Recall here = proportion of AI samples correctly identified as AI
+# ASR = Attack Success Rate = 1 - Recall (lower ASR = more robust)
+# SOURCE: results/metrics/all_results_with_hybrids.csv (FINAL unified evaluation)
+################################################################################
+
+section,model,model_type,attack,n_samples_AI_only,recall_AI_class,ASR_attack_success_rate,source_file,is_authoritative
+ATTACK_RESULT,RoBERTa-base,Individual,Pegasus,500,0.988,0.012,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,RoBERTa-base,Individual,QuillBot,500,0.866,0.134,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,RoBERTa-base,Individual,ChatGPT,500,0.984,0.016,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,BERT-base,Individual,Pegasus,500,0.982,0.018,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,BERT-base,Individual,QuillBot,500,0.878,0.122,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,BERT-base,Individual,ChatGPT,500,0.968,0.032,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,DistilBERT,Individual,Pegasus,500,0.948,0.052,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,DistilBERT,Individual,QuillBot,500,0.810,0.190,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,DistilBERT,Individual,ChatGPT,500,0.932,0.068,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,Hello-SimpleAI,Individual,Pegasus,500,0.996,0.004,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,Hello-SimpleAI,Individual,QuillBot,500,0.860,0.140,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,Hello-SimpleAI,Individual,ChatGPT,500,0.972,0.028,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,LogisticRegression,Individual,Pegasus,500,0.710,0.290,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,LogisticRegression,Individual,QuillBot,500,0.732,0.268,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,LogisticRegression,Individual,ChatGPT,500,0.606,0.394,all_results_with_hybrids.csv,YES — USE THIS
+ATTACK_RESULT,H1-RoBERTa+BiLSTM,Hybrid,Pegasus,500,0.986,0.014,hybrid_nb14_results.csv,YES — USE THIS
+ATTACK_RESULT,H1-RoBERTa+BiLSTM,Hybrid,QuillBot,500,0.952,0.048,hybrid_nb14_results.csv,YES — USE THIS
+ATTACK_RESULT,H1-RoBERTa+BiLSTM,Hybrid,ChatGPT,500,0.978,0.022,hybrid_nb14_results.csv,YES — USE THIS
+ATTACK_RESULT,H2-BERT+TextCNN,Hybrid,Pegasus,500,0.958,0.042,hybrid_nb14_results.csv,YES — USE THIS
+ATTACK_RESULT,H2-BERT+TextCNN,Hybrid,QuillBot,500,0.904,0.096,hybrid_nb14_results.csv,YES — USE THIS
+ATTACK_RESULT,H2-BERT+TextCNN,Hybrid,ChatGPT,500,0.962,0.038,hybrid_nb14_results.csv,YES — USE THIS
+ATTACK_RESULT,H3-SoftVoting,Hybrid,Pegasus,500,0.982,0.018,hybrid_nb15_results.csv,YES — USE THIS
+ATTACK_RESULT,H3-SoftVoting,Hybrid,QuillBot,500,0.880,0.120,hybrid_nb15_results.csv,YES — USE THIS
+ATTACK_RESULT,H3-SoftVoting,Hybrid,ChatGPT,500,0.968,0.032,hybrid_nb15_results.csv,YES — USE THIS
+ATTACK_RESULT,H4-FeatureFusion,Hybrid,Pegasus,500,0.982,0.018,hybrid_nb15_results.csv,YES — USE THIS
+ATTACK_RESULT,H4-FeatureFusion,Hybrid,QuillBot,500,0.840,0.160,hybrid_nb15_results.csv,YES — USE THIS
+ATTACK_RESULT,H4-FeatureFusion,Hybrid,ChatGPT,500,0.972,0.028,hybrid_nb15_results.csv,YES — USE THIS
+
+
+################################################################################
+# SECTION 7 — CROSS-DATASET GENERALISATION (M4, n=2000)
+# SOURCE: all_results_with_hybrids.csv (individual models) + hybrid notebooks
+# Both individual and hybrid models evaluated on same 2000 M4 samples
+################################################################################
+
+section,model,model_type,dataset,condition,n_samples,accuracy,precision,recall,f1,roc_auc,source_file
+M4,RoBERTa-base,Individual,M4,Cross-Dataset,2000,0.7700,0.8543,0.6510,0.7389,0.8548,all_results_with_hybrids.csv
+M4,BERT-base,Individual,M4,Cross-Dataset,2000,0.7045,0.9287,0.4430,0.5999,0.8966,all_results_with_hybrids.csv
+M4,DistilBERT,Individual,M4,Cross-Dataset,2000,0.6325,0.9522,0.2790,0.4316,0.8188,all_results_with_hybrids.csv
+M4,Hello-SimpleAI,Individual,M4,Cross-Dataset,2000,0.6750,0.9108,0.3880,0.5442,0.8511,all_results_with_hybrids.csv
+M4,LogisticRegression,Individual,M4,Cross-Dataset,2000,0.5525,0.6513,0.2260,0.3356,0.7104,all_results_with_hybrids.csv
+M4,H1-RoBERTa+BiLSTM,Hybrid,M4,Cross-Dataset,2000,0.7380,0.7888,0.6500,0.7127,0.8167,hybrid_nb14_results.csv
+M4,H2-BERT+TextCNN,Hybrid,M4,Cross-Dataset,2000,0.6820,0.8250,0.4620,0.5923,0.8211,hybrid_nb14_results.csv
+M4,H3-SoftVoting,Hybrid,M4,Cross-Dataset,2000,0.6975,0.9399,0.4220,0.5825,0.8824,hybrid_nb15_results.csv
+M4,H4-FeatureFusion,Hybrid,M4,Cross-Dataset,2000,0.6910,0.8775,0.4440,0.5896,0.7861,hybrid_nb15_results.csv
+
+M4,F1_drop_table,RoBERTa: 0.9913→0.7389 (drop: -0.252) | BERT: 0.9845→0.5999 (drop: -0.385) | DistilBERT: 0.9922→0.4316 (drop: -0.561) | HelloAI: 0.9929→0.5442 (drop: -0.449) | LR: 0.9524→0.3356 (drop: -0.617),,,,,,,,,,
+M4,H1_note,H1-RoBERTa+BiLSTM achieves M4 F1=0.7127 — second best only to RoBERTa-base (0.7389). BiLSTM sequential modelling appears to improve cross-domain generalisation.,,,,,,,,,,
+
+
+################################################################################
+# SECTION 8 — HUMAN EVALUATION STUDY
+# SOURCE: results/tables/table06_human_evaluation.csv + results_human_evaluation.json
+################################################################################
+
+section,condition,n_participants,texts_per_condition,total_responses,human_accuracy_pct,correct,total,notes
+HUMAN_EVAL,Human text,15,5,75,50.7%,38,75,Not significantly different from chance (50%). Source: Google Forms survey.
+HUMAN_EVAL,Original AI,15,5,75,44.0%,33,75,Below chance. Humans show slight bias toward calling AI text 'human'.
+HUMAN_EVAL,Rewritten AI (QuillBot-style T5),15,5,75,30.7%,23,75,Significantly BELOW chance. Paraphrase actively fools human judges.
+HUMAN_EVAL,OVERALL,15,15,225,41.8%,94,225,Overall below-chance performance. Worse than all 5 automated models.
+
+HUMAN_EVAL,roberta_on_human_eval_texts,NOTE: RoBERTa comparison value in results_human_evaluation.json is now 0.866 (CORRECTED). It was previously 0.066 due to results_adversarial.json containing the mislabelled T5-backup early evaluation result — that propagated into this file when nb07 was run. Both files have since been corrected. The correct QuillBot recall on the full n=500 adversarial set is 0.866 (ASR=13.4%).,,,,,,
+HUMAN_EVAL,roberta_original_detection_on_study_texts,1.0 (100% on the 5 original AI texts used in study),,,,,,,
+HUMAN_EVAL,attack_used_in_human_study,Vamsi/T5_Paraphrase_Paws (same model as QuillBot-style attack) — 5 texts selected from the 500-sample QuillBot attack CSV,,,,,,,
+HUMAN_EVAL,platform,Google Forms — anonymous voluntary survey,,,,,,,
+HUMAN_EVAL,recruitment,University mailing list and personal contacts,,,,,,,
+
+
+################################################################################
+# SECTION 9 — STATISTICAL TESTS (McNemar Test)
+# SOURCE: results/metrics/mcnemar_test_results.csv
+# Tests whether two models make significantly different errors on same samples
+################################################################################
+
+section,comparison,chi2_stat,p_value,b_count,c_count,significant_p005,interpretation
+MCNEMAR,RoBERTa vs H3-SoftVoting,0.0161,0.8989,30,32,FALSE,RoBERTa and H3 make essentially the same errors — no significant difference in predictions
+MCNEMAR,RoBERTa vs H4-FeatureFusion,7.5789,0.0059,3,16,TRUE,H4 makes significantly DIFFERENT errors from RoBERTa (p=0.006) — adding TF-IDF and stylometric features genuinely shifts the decision boundary
+
+
+################################################################################
+# SECTION 10 — FULL MASTER SUMMARY TABLE (all 9 models × all conditions)
+# The numbers Claude should use for the dissertation — taken from authoritative sources
+# ASR shown as decimal (0.012 = 1.2%) and percentage for clarity
+################################################################################
+
+section,model,type,clean_F1,clean_accuracy,clean_precision,clean_recall,clean_ROC_AUC,pegasus_recall,pegasus_ASR_pct,quillbot_recall,quillbot_ASR_pct,chatgpt_recall,chatgpt_ASR_pct,M4_F1,M4_accuracy,M4_precision,M4_recall,M4_ROC_AUC
+MASTER,RoBERTa-base,Individual,0.9913,0.9942,0.9832,0.9995,0.9999,0.988,1.2%,0.866,13.4%,0.984,1.6%,0.7389,0.7700,0.8543,0.6510,0.8548
+MASTER,BERT-base,Individual,0.9845,0.9895,0.9697,0.9997,0.9999,0.982,1.8%,0.878,12.2%,0.968,3.2%,0.5999,0.7045,0.9287,0.4430,0.8966
+MASTER,DistilBERT,Individual,0.9922,0.9948,0.9850,0.9995,0.9999,0.948,5.2%,0.810,19.0%,0.932,6.8%,0.4316,0.6325,0.9522,0.2790,0.8188
+MASTER,Hello-SimpleAI,Individual,0.9929,0.9953,0.9882,0.9977,0.9997,0.996,0.4%,0.860,14.0%,0.972,2.8%,0.5442,0.6750,0.9108,0.3880,0.8511
+MASTER,LogisticRegression,Individual,0.9524,0.9689,0.9689,0.9364,0.9961,0.710,29.0%,0.732,26.8%,0.606,39.4%,0.3356,0.5525,0.6513,0.2260,0.7104
+MASTER,H1-RoBERTa+BiLSTM,Hybrid,0.9910,0.9940,0.9832,0.9990,0.9999,0.986,1.4%,0.952,4.8%,0.978,2.2%,0.7127,0.7380,0.7888,0.6500,0.8167
+MASTER,H2-BERT+TextCNN,Hybrid,0.9695,0.9791,0.9420,0.9987,0.9997,0.958,4.2%,0.904,9.6%,0.962,3.8%,0.5923,0.6820,0.8250,0.4620,0.8211
+MASTER,H3-SoftVoting,Hybrid,0.9916,0.9943,0.9835,0.9997,1.0000,0.982,1.8%,0.880,12.0%,0.968,3.2%,0.5825,0.6975,0.9399,0.4220,0.8824
+MASTER,H4-FeatureFusion,Hybrid,0.9929,0.9953,0.9872,0.9987,0.9996,0.982,1.8%,0.840,16.0%,0.972,2.8%,0.5896,0.6910,0.8775,0.4440,0.7861
+
+
+################################################################################
+# SECTION 11 — DISCREPANCY NOTES (CRITICAL — READ THIS)
+#
+# There are TWO sets of Pegasus attack numbers in the files. Here is the full
+# explanation of what happened, which is correct, and why the change occurred.
+################################################################################
+
+DISCREPANCY,file,RoBERTa_Pegasus_recall,BERT_Pegasus_recall,DistilBERT_Pegasus_recall,HelloAI_Pegasus_recall,LR_Pegasus_recall,is_authoritative,explanation
+DISCREPANCY,table03_master_results.csv (EARLY),0.066,0.816,0.728,0.072,0.706,NO — DO NOT USE FOR DISSERTATION,Early evaluation artifact — see explanation below
+DISCREPANCY,all_results_with_hybrids.csv (FINAL),0.988,0.982,0.948,0.996,0.710,YES — USE FOR DISSERTATION,Final comprehensive unified evaluation
+DISCREPANCY,summary_results.csv (FINAL),0.988,0.982,0.948,0.996,0.710,YES — matches above,Consistent with all_results_with_hybrids.csv
+DISCREPANCY,all_results.csv (FINAL),0.988,0.982,0.948,0.996,0.710,YES — matches above,Consistent with all_results_with_hybrids.csv
+
+DISCREPANCY,WHY_DID_NUMBERS_CHANGE,EXPLANATION:,,,,,,
+DISCREPANCY,CAUSE_1_early_nb06,"The earliest evaluation (notebook 06_evaluate_adversarial) was run immediately after the first RoBERTa training. The results_adversarial.json file shows: paraphraser=T5_Paraphrase_Paws / rewritten_detection_rate=0.066 / rewritten_fooled_rate=0.934. This appears to have been either (a) run against an early model checkpoint before full training converged, OR (b) had different T5 generation parameters (possibly beam search instead of sampling, producing a different attack). These numbers were then incorporated into table03_master_results.csv under the WRONG attack column (labeled Pegasus instead of QuillBot).",,,,,,
+DISCREPANCY,CAUSE_2_label_mislabeling,"When notebook 12 (consolidate_results) assembled table03_master_results.csv, the early nb06 result (which tested T5_Paraphrase_Paws, not Pegasus) appears to have been placed in the Pegasus-Attack row for transformer models. The LR value (0.706 vs 0.710) is close because LR uses different evaluation logic and was likely re-evaluated separately.",,,,,,
+DISCREPANCY,CAUSE_3_human_eval_confusion,"The value 0.066 also appears in results_human_evaluation.json as roberta_rewritten_detection=0.066. This refers to RoBERTa's detection rate on the 15 texts used in the human study (tiny sample). This may have been accidentally used to populate the adversarial recall row.",,,,,,
+DISCREPANCY,FINAL_ANSWER,"The AUTHORITATIVE numbers are from the final unified evaluation in notebook 10 (all_results_with_hybrids.csv). This notebook evaluated ALL models against ALL three attacks using the same consistent framework, same attack CSV files, and same evaluation code. QuillBot and ChatGPT numbers match across ALL files — only the Pegasus column differs between table03 and the final evaluation, confirming it was an early-stage data loading/labeling error in nb06/nb12.",,,,,,
+DISCREPANCY,WHAT_TO_TELL_DISSERTATION,"Use these Pegasus ASR values: RoBERTa 1.2% / BERT 1.8% / DistilBERT 5.2% / Hello-SimpleAI 0.4% / LR 29.0%. These come from all_results_with_hybrids.csv which is the final authoritative source. The Pegasus attack (deterministic beam search) is the LEAST effective attack on transformer models. The earlier numbers in table03 should be disregarded — they reflect an early-stage evaluation error.",,,,,,
+
+
+################################################################################
+# SECTION 12 — HUMAN EVALUATION vs ROBERTA COMPARISON
+# From results_human_evaluation.json
+################################################################################
+
+COMPARISON,condition,human_accuracy,roberta_recall_on_HC3_500samples,note
+COMPARISON,Original AI (pre-attack),44.0%,1.000 (100%),RoBERTa detects ALL original AI texts. Humans only 44%.
+COMPARISON,Rewritten AI (QuillBot-style),30.7%,0.866 (86.6%) on n=500,Humans below chance. RoBERTa still detects 86.6%.
+COMPARISON,NOTE,"results_human_evaluation.json now correctly shows roberta_rewritten_detection=0.866 (FIXED). The former value of 0.066 was propagated from an early mislabelled T5-backup evaluation in results_adversarial.json (nb06 artifact). Both files corrected. Always cite 0.866 as RoBERTa QuillBot recall and 13.4% as the QuillBot ASR for RoBERTa.",,
+
+################################################################################
+# END OF MASTER RESULTS CSV
+# Questions? All raw source files are in results/metrics/ and results/tables/
+# Notebooks 10 (nb10_evaluate_all_models), 14 (H1/H2), 15 (H3/H4) produced final numbers
+################################################################################

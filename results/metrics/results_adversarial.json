@@ -1,13 +1,16 @@
 {
-  "condition": "adversarial_paraphrase",
+  "condition": "pegasus_paraphrase",
+  "model_evaluated": "RoBERTa-base",
+  "attack_model": "tuner007/pegasus_paraphrase",
+  "attack_file": "data/adversarial/pegasus_rewritten_500.csv",
   "n_samples": 500,
-  "paraphraser": "Vamsi/T5_Paraphrase_Paws",
   "original_detection_rate": 1.0,
-  "rewritten_detection_rate": 0.066,
+  "rewritten_detection_rate": 0.988,
   "original_fooled_rate": 0.0,
-  "rewritten_fooled_rate": 0.934,
-  "detection_rate_drop_pp": 93.4,
-  "relative_drop_pct": 93.4,
+  "rewritten_fooled_rate": 0.012,
+  "detection_rate_drop_pp": 1.2,
+  "relative_drop_pct": 1.2,
   "original_mean_ai_prob": 1.0,
-  "rewritten_mean_ai_prob": 0.0676
+  "rewritten_mean_ai_prob": 0.9441,
+  "note": "Corrected from early run (nb06) which accidentally evaluated against pegasus_rewritten_500_t5_backup.csv (T5_Paraphrase_Paws output mislabelled as Pegasus). Final values from all_results_with_hybrids.csv (nb10). Attack file pegasus_rewritten_500.csv now contains true tuner007/pegasus_paraphrase output."
 }

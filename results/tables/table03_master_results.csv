@@ -4,21 +4,21 @@ BERT-base,HC3,Clean,11820,0.9895,0.9697,0.9997,0.9845,0.9999,,Source: all_result
 DistilBERT,HC3,Clean,11820,0.9948,0.985,0.9995,0.9922,0.9999,,Source: all_results.csv,,
 Hello-SimpleAI,HC3,Clean,11820,0.9953,0.9882,0.9977,0.9929,0.9997,,Source: helloSimpleAI_metrics.json,,
 LogisticRegression,HC3,Clean,11820,0.9689,0.9689,0.9364,0.9524,0.9961,,Source: lr_final_metrics.json,,
-RoBERTa-base,HC3,Pegasus-Attack,500,,,0.066,,,0.934,AI-only samples; acc/prec/f1 not available (recall only stored),,0.9335
-BERT-base,HC3,Pegasus-Attack,500,,,0.816,,,0.184,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1837
-DistilBERT,HC3,Pegasus-Attack,500,,,0.728,,,0.272,AI-only samples; acc/prec/f1 not available (recall only stored),,0.2715
-Hello-SimpleAI,HC3,Pegasus-Attack,500,,,0.072,,,0.928,AI-only samples; acc/prec/f1 not available (recall only stored),,0.9257
-LogisticRegression,HC3,Pegasus-Attack,500,,,0.706,,,0.294,AI-only samples; acc/prec/f1 not available (recall only stored),,0.2304
-RoBERTa-base,HC3,QuillBot-Attack,500,,,0.866,,,0.134,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1335
-BERT-base,HC3,QuillBot-Attack,500,,,0.878,,,0.122,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1217
-DistilBERT,HC3,QuillBot-Attack,500,,,0.81,,,0.19,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1895
-Hello-SimpleAI,HC3,QuillBot-Attack,500,,,0.86,,,0.14,AI-only samples; acc/prec/f1 not available (recall only stored),,0.1377
-LogisticRegression,HC3,QuillBot-Attack,500,,,0.732,,,0.268,AI-only samples; acc/prec/f1 not available (recall only stored),,0.2044
-RoBERTa-base,HC3,ChatGPT-Attack,500,,,0.984,,,0.016,AI-only samples; acc/prec/f1 not available (recall only stored),,0.0155
-BERT-base,HC3,ChatGPT-Attack,500,,,0.968,,,0.032,AI-only samples; acc/prec/f1 not available (recall only stored),,0.0317
-DistilBERT,HC3,ChatGPT-Attack,500,,,0.932,,,0.068,AI-only samples; acc/prec/f1 not available (recall only stored),,0.0675
-Hello-SimpleAI,HC3,ChatGPT-Attack,500,,,0.972,,,0.028,AI-only samples; acc/prec/f1 not available (recall only stored),,0.0257
-LogisticRegression,HC3,ChatGPT-Attack,500,,,0.606,,,0.394,AI-only samples; acc/prec/f1 not available (recall only stored),,0.3304
+RoBERTa-base,HC3,Pegasus-Attack,500,,,0.988,,,0.012,tuner007/pegasus_paraphrase; AI-only samples; corrected from early mislabelled T5 run,,0.0115
+BERT-base,HC3,Pegasus-Attack,500,,,0.982,,,0.018,tuner007/pegasus_paraphrase; AI-only samples; corrected from early mislabelled T5 run,,0.0177
+DistilBERT,HC3,Pegasus-Attack,500,,,0.948,,,0.052,tuner007/pegasus_paraphrase; AI-only samples; corrected from early mislabelled T5 run,,0.0515
+Hello-SimpleAI,HC3,Pegasus-Attack,500,,,0.996,,,0.004,tuner007/pegasus_paraphrase; AI-only samples; corrected from early mislabelled T5 run,,0.0017
+LogisticRegression,HC3,Pegasus-Attack,500,,,0.710,,,0.290,tuner007/pegasus_paraphrase; AI-only samples; corrected from early mislabelled T5 run,,0.2264
+RoBERTa-base,HC3,QuillBot-Attack,500,,,0.866,,,0.134,Vamsi/T5_Paraphrase_Paws top-k sampling; AI-only samples,,0.1335
+BERT-base,HC3,QuillBot-Attack,500,,,0.878,,,0.122,Vamsi/T5_Paraphrase_Paws top-k sampling; AI-only samples,,0.1217
+DistilBERT,HC3,QuillBot-Attack,500,,,0.810,,,0.190,Vamsi/T5_Paraphrase_Paws top-k sampling; AI-only samples,,0.1895
+Hello-SimpleAI,HC3,QuillBot-Attack,500,,,0.860,,,0.140,Vamsi/T5_Paraphrase_Paws top-k sampling; AI-only samples,,0.1377
+LogisticRegression,HC3,QuillBot-Attack,500,,,0.732,,,0.268,Vamsi/T5_Paraphrase_Paws top-k sampling; AI-only samples,,0.2044
+RoBERTa-base,HC3,ChatGPT-Attack,500,,,0.984,,,0.016,OpenAI gpt-3.5-turbo; AI-only samples,,0.0155
+BERT-base,HC3,ChatGPT-Attack,500,,,0.968,,,0.032,OpenAI gpt-3.5-turbo; AI-only samples,,0.0317
+DistilBERT,HC3,ChatGPT-Attack,500,,,0.932,,,0.068,OpenAI gpt-3.5-turbo; AI-only samples,,0.0675
+Hello-SimpleAI,HC3,ChatGPT-Attack,500,,,0.972,,,0.028,OpenAI gpt-3.5-turbo; AI-only samples,,0.0257
+LogisticRegression,HC3,ChatGPT-Attack,500,,,0.606,,,0.394,OpenAI gpt-3.5-turbo; AI-only samples,,0.3304
 RoBERTa-base,M4,Cross-Dataset,2000,0.77,0.8543,0.651,0.7389,0.8548,,"Generalisation test; trained on HC3, evaluated on M4",,
 BERT-base,M4,Cross-Dataset,2000,0.7045,0.9287,0.443,0.5999,0.8966,,"Generalisation test; trained on HC3, evaluated on M4",,
 DistilBERT,M4,Cross-Dataset,2000,0.6325,0.9522,0.279,0.4316,0.8188,,"Generalisation test; trained on HC3, evaluated on M4",,

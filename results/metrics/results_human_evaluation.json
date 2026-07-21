@@ -7,5 +7,6 @@
   "original_ai_accuracy": 0.44,
   "rewritten_ai_accuracy": 0.307,
   "roberta_original_detection": 1.0,
-  "roberta_rewritten_detection": 0.066
+  "roberta_rewritten_detection": 0.866,
+  "note_roberta_rewritten": "QuillBot-style T5_Paraphrase_Paws recall on full 500-sample adversarial set (all_results_with_hybrids.csv). The human study used QuillBot-style texts so this is the correct comparison. Earlier value of 0.066 came from results_adversarial.json which at the time held the early mislabelled T5-backup evaluation result — now corrected."
 }
